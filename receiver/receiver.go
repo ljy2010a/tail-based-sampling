@@ -1,6 +1,7 @@
 package receiver
 
 import (
+	"encoding/json"
 	"fmt"
 	"github.com/gin-gonic/gin"
 	"github.com/ljy2010a/tailf-based-sampling/common"
@@ -33,12 +34,61 @@ var (
 )
 
 func (r *Receiver) Run() {
-	// localhost:{8000,8001,8002}/ready
-	// localhost:{8000,8001,8002}/setParameter
 	r.logger, _ = zap.NewProduction()
 	defer r.logger.Sync()
+	go func() {
+		i := 0
+		for {
+			if i > 2 {
+				r.logger.Info("too long to stop")
+				time.Sleep(10 * time.Second)
+				os.Exit(0)
+			}
+			i++
+			r.logger.Info("sleep",
+				zap.String("port", r.HttpPort),
+				zap.Int("i", i),
+			)
+			time.Sleep(1 * time.Minute)
+		}
+	}()
 
-	r.deleteChan = make(chan string, 200000)
+	go func() {
+		time.Sleep(30 * time.Second)
+		if r.DataPort != "" {
+			r.logger.Info("has dataport")
+			return
+		}
+		r.logger.Info("try to detect")
+
+		port := 8000
+		for i := 0; i < 1000; i++ {
+			port++
+			dataUrl := fmt.Sprintf("http://127.0.0.1:%d/trace1.data", port)
+			resp, err := http.Get(dataUrl)
+			if err != nil {
+				continue
+			}
+			resp.Body.Close()
+			r.logger.Info("detect port",
+				zap.Int("port", port),
+				zap.Int("code", resp.StatusCode),
+			)
+
+			if resp.StatusCode == 200 && r.HttpPort == "8000" {
+				r.DataPort = fmt.Sprintf("%d", port)
+
+				dataUrl := fmt.Sprintf("http://127.0.0.1:%s/trace1.data", r.DataPort)
+				go r.ReadHttp(dataUrl)
+
+				dataUrl2 := fmt.Sprintf("http://127.0.0.1:%s/trace2.data", r.DataPort)
+				go r.ReadHttp(dataUrl2)
+				return
+			}
+		}
+	}()
+
+	r.deleteChan = make(chan string, 80000)
 	r.finishChan = make(chan interface{})
 	go r.finish()
 
@@ -48,26 +98,34 @@ func (r *Receiver) Run() {
 	router.GET("/ready", r.ReadyHandler)
 	router.GET("/setParameter", r.SetParamHandler)
 	router.GET("/qw", r.QueryWrongHandler)
-	router.Run(fmt.Sprintf("0.0.0.0:%s", r.HttpPort))
+	err := router.Run(fmt.Sprintf(":%s", r.HttpPort))
+	if err != nil {
+		r.logger.Info("r.HttpPort fail", zap.Error(err))
+	}
 }
 
 func (r *Receiver) ReadyHandler(c *gin.Context) {
+	r.logger.Info("ready", zap.String("port", r.HttpPort))
 	c.JSON(http.StatusOK, "ok")
 	return
 }
 
 func (r *Receiver) SetParamHandler(c *gin.Context) {
-	port := c.DefaultQuery("port", "8081")
+	port := c.DefaultQuery("port", "")
 	r.DataPort = port
+	r.logger.Info("SetParamHandler",
+		zap.String("port", r.HttpPort),
+		zap.String("set", r.DataPort),
+	)
 	// 暂时用一个
 	if r.HttpPort == "8000" {
-		dataUrl := fmt.Sprintf("http://127.0.0.1:%s/trace1.data", port)
-		r.logger.Info("gen dataUrl", zap.String("dataUrl", dataUrl))
+		dataUrl := fmt.Sprintf("http://127.0.0.1:%s/trace1.data", r.DataPort)
+		//r.logger.Info("gen dataUrl", zap.String("dataUrl", dataUrl))
 		go r.ReadHttp(dataUrl)
 
-		dataUrl = fmt.Sprintf("http://127.0.0.1:%s/trace2.data", port)
-		r.logger.Info("gen dataUrl", zap.String("dataUrl", dataUrl))
-		go r.ReadHttp(dataUrl)
+		dataUrl2 := fmt.Sprintf("http://127.0.0.1:%s/trace2.data", r.DataPort)
+		//r.logger.Info("gen dataUrl", zap.String("dataUrl", dataUrl2))
+		go r.ReadHttp(dataUrl2)
 	}
 	c.JSON(http.StatusOK, "ok")
 	return
@@ -90,21 +148,23 @@ func (r *Receiver) QueryWrongHandler(c *gin.Context) {
 func (r *Receiver) ConsumeTraceData(spans []*common.SpanData) {
 
 	idToSpans := make(map[string][]*common.SpanData)
-	for _, traceInfo := range spans {
-		//id := common.BytesToString(traceInfo.TraceId)
-		id := traceInfo.TraceId
-		idToSpans[id] = append(idToSpans[id], traceInfo)
+	for _, span := range spans {
+		//id := common.BytesToString(span.TraceId)
+		id := span.TraceId
+		idToSpans[id] = append(idToSpans[id], span)
+		span.TraceId = ""
 	}
 
 	for id, spans := range idToSpans {
 		initialTraceData := &common.TraceData{
 			Sd:     spans,
+			Id:     id,
 			Source: r.HttpPort,
 		}
 		d, loaded := r.idToTrace.LoadOrStore(id, initialTraceData)
 		if loaded {
 			// 已存在
-			r.logger.Debug("exist id", zap.String("id", id))
+			//r.logger.Debug("exist id", zap.String("id", id))
 			td := d.(*common.TraceData)
 			td.Add(spans)
 		} else {
@@ -151,15 +211,14 @@ func (r *Receiver) dropTrace(id string, duration time.Time, keep bool) {
 	if wrong {
 		// send2compactor no keep
 		//r.logger.Info("send wrong id", zap.String("id", id))
-		//_, body, err := compactorReq.Post(fmt.Sprintf("http://127.0.0.1:%s/sw", r.CompactorPort)).SendStruct(td).End()
-		//r.logger.Info("report checksum",
-		//	zap.String("body", body),
-		//	zap.Errors("err", err),
-		//)
-		compactorReq.Post(fmt.Sprintf("http://127.0.0.1:%s/sw", r.CompactorPort)).SendStruct(td).End()
+		b, _ := json.Marshal(td)
+		go func(_b []byte) {
+			swUrl := fmt.Sprintf("http://127.0.0.1:%s/sw", r.CompactorPort)
+			compactorReq.Post(swUrl).SendRawBytes(_b).End()
+		}(b)
 		return
 	}
-	// keep in cache tty 30s
+	// keep in cache tty 5s
 
 	//ret, err := common.GzipTd(td)
 	//if err != nil {
@@ -192,5 +251,6 @@ func (r *Receiver) notifyFIN() {
 		zap.Errors("err", err),
 	)
 	r.logger.Info("shutdown", zap.String("port", r.HttpPort))
-	os.Exit(0)
+	//time.Sleep(10 * time.Second)
+	//os.Exit(0)
 }

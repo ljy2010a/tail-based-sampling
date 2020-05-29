@@ -20,10 +20,10 @@ import (
 //host：机器标识，比如ip，机器名
 //tags: 链路信息中tag信息，存在多个tag的key和value信息。格式为key1=val1&key2=val2&key3=val3 比如 http.status_code=200&error=1
 type SpanData struct {
-	TraceId   string
-	StartTime int64
-	Tags      string
-	Wrong     bool
+	TraceId   string `json:"-"`
+	StartTime int64  `json:"s"`
+	Tags      string `json:"t"`
+	Wrong     bool   `json:"-"`
 }
 
 var (
@@ -62,7 +62,8 @@ func ParseSpanData(line []byte) *SpanData {
 
 type TraceData struct {
 	Sd     Spans
-	Source string
+	Id     string
+	Source string `json:"source"`
 	sync.Mutex
 }
 

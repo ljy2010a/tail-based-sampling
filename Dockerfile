@@ -1,4 +1,5 @@
 FROM centos:centos7
+RUN set -ex && cp /usr/share/zoneinfo/Asia/Shanghai /etc/localtime
 WORKDIR /usr/local/src
 COPY main /usr/local/src
 COPY start.sh /usr/local/src

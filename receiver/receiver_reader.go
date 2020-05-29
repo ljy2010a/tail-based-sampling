@@ -39,6 +39,7 @@ func (r *Receiver) ReadFile(fileName string) {
 }
 
 func (r *Receiver) ReadHttp(fileUrl string) {
+	r.logger.Info("dataUrl", zap.String("dataUrl", fileUrl))
 	resp, err := http.Get(fileUrl)
 	if err != nil {
 		r.logger.Error("http get err", zap.Error(err))
@@ -50,13 +51,22 @@ func (r *Receiver) ReadHttp(fileUrl string) {
 }
 
 func (r *Receiver) Read(rd io.Reader) {
+	r.logger.Info("read read")
 	btime := time.Now()
-	br := bufio.NewReaderSize(rd, 8096)
+	br := bufio.NewReaderSize(rd, 4096)
 	size := 0
 	total := 0
 	wrong := 0
-	spanDatas := make([]*common.SpanData, 100)
+	groupNum := 500
+	spanDatas := make([]*common.SpanData, groupNum)
 	i := 0
+	go func() {
+		time.Sleep(10 * time.Second)
+		r.logger.Info("read stat",
+			zap.Int("total", total),
+			zap.Int("wrong", wrong),
+		)
+	}()
 	for {
 		line, _, c := br.ReadLine()
 		if c == io.EOF {
@@ -74,15 +84,18 @@ func (r *Receiver) Read(rd io.Reader) {
 			//fmt.Printf("err : %s\n", string(line))
 			wrong++
 		}
-		if i < 100 {
+		if i < groupNum {
 			spanDatas[i] = spanData
 		}
-		if i == 99 {
+		if i == groupNum-1 {
 			r.ConsumeTraceData(spanDatas)
 			i = 0
 			continue
 		}
 		i++
+	}
+	if i != 0 {
+		r.ConsumeTraceData(spanDatas[:i])
 	}
 	r.logger.Info("read file done ",
 		zap.Int("total", total),

@@ -10,7 +10,7 @@ import (
 )
 
 func main() {
-	fmt.Println(time.Now().Format("2006-01-02 15:04:05"))
+	fmt.Println(VERSION, time.Now().Format("2006-01-02 15:04:05"))
 
 	rand.Seed(time.Now().Unix())
 	var httpPort string
@@ -20,14 +20,12 @@ func main() {
 	if httpPort == "8000" || httpPort == "8001" {
 		receiver := receiver.Receiver{
 			HttpPort:      httpPort,
-			DataPort:      "8081",
 			CompactorPort: "8002",
 		}
 		receiver.Run()
 	} else if httpPort == "8002" {
 		compactor := compactor.Compactor{
 			HttpPort: httpPort,
-			DataPort: "8081",
 		}
 		compactor.Run()
 	}
