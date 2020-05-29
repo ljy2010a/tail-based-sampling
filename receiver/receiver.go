@@ -7,6 +7,7 @@ import (
 	"github.com/smallnest/goreq"
 	"go.uber.org/zap"
 	"net/http"
+	"os"
 	"sync"
 	"time"
 )
@@ -24,6 +25,7 @@ type Receiver struct {
 	finishChan chan interface{}
 	gzipLen    int
 	closeTimes int64
+	sync.Mutex
 }
 
 var (
@@ -36,7 +38,7 @@ func (r *Receiver) Run() {
 	r.logger, _ = zap.NewProduction()
 	defer r.logger.Sync()
 
-	r.deleteChan = make(chan string, 100000)
+	r.deleteChan = make(chan string, 200000)
 	r.finishChan = make(chan interface{})
 	go r.finish()
 
@@ -46,7 +48,7 @@ func (r *Receiver) Run() {
 	router.GET("/ready", r.ReadyHandler)
 	router.GET("/setParameter", r.SetParamHandler)
 	router.GET("/qw", r.QueryWrongHandler)
-	router.Run(fmt.Sprintf(":%s", r.HttpPort))
+	router.Run(fmt.Sprintf("0.0.0.0:%s", r.HttpPort))
 }
 
 func (r *Receiver) ReadyHandler(c *gin.Context) {
@@ -126,6 +128,8 @@ func (r *Receiver) ConsumeTraceData(spans []*common.SpanData) {
 }
 
 func (r *Receiver) dropTrace(id string, duration time.Time, keep bool) {
+	r.Lock()
+	defer r.Unlock()
 	d, ok := r.idToTrace.Load(id)
 	if !ok {
 		r.logger.Error("drop id not exist", zap.String("id", id))
@@ -181,10 +185,12 @@ func (r *Receiver) finish() {
 }
 
 func (r *Receiver) notifyFIN() {
-	// send fin_noti
+	// send fin
 	_, body, err := compactorReq.Get(fmt.Sprintf("http://127.0.0.1:%s/fn", r.CompactorPort)).End()
 	r.logger.Info("notify FIN",
 		zap.String("body", body),
 		zap.Errors("err", err),
 	)
+	r.logger.Info("shutdown", zap.String("port", r.HttpPort))
+	os.Exit(0)
 }

@@ -1,8 +1,6 @@
 package main
 
 import (
-	"crypto/md5"
-	"encoding/hex"
 	"flag"
 	"fmt"
 	"github.com/ljy2010a/tailf-based-sampling/compactor"
@@ -12,9 +10,7 @@ import (
 )
 
 func main() {
-	h := md5.New()
-	h.Write([]byte("MD5testing"))
-	fmt.Println(hex.EncodeToString(h.Sum(nil)))
+	fmt.Println(time.Now().Format("2006-01-02 15:04:05"))
 
 	rand.Seed(time.Now().Unix())
 	var httpPort string
@@ -35,5 +31,6 @@ func main() {
 		}
 		compactor.Run()
 	}
-	fmt.Sprintf("port not macth [%v] \n", httpPort)
+	fmt.Printf("port not macth [%v] \n", httpPort)
+	time.Sleep(10 * time.Second)
 }

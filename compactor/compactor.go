@@ -9,6 +9,7 @@ import (
 	"github.com/smallnest/goreq"
 	"go.uber.org/zap"
 	"net/http"
+	"os"
 	"sort"
 	"strings"
 )
@@ -44,7 +45,7 @@ func (r *Compactor) Run() {
 	router.GET("/setParameter", r.SetParamHandler)
 	router.POST("/sw", r.SetWrongHandler)
 	router.GET("/fn", r.FinishNotifyHandler)
-	router.Run(fmt.Sprintf(":%s", r.HttpPort))
+	router.Run(fmt.Sprintf("0.0.0.0:%s", r.HttpPort))
 }
 
 func (r *Compactor) ReadyHandler(c *gin.Context) {
@@ -104,6 +105,8 @@ func (r *Compactor) finish() {
 				zap.String("body", body),
 				zap.Errors("err", err),
 			)
+			r.logger.Info("shutdown", zap.String("port", r.HttpPort))
+			os.Exit(0)
 			return
 		}
 	}
