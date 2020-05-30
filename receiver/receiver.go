@@ -1,7 +1,6 @@
 package receiver
 
 import (
-	"encoding/json"
 	"fmt"
 	"github.com/gin-gonic/gin"
 	"github.com/ljy2010a/tailf-based-sampling/common"
@@ -119,10 +118,16 @@ func (r *Receiver) SetParamHandler(c *gin.Context) {
 	)
 	// 暂时用一个
 	if r.HttpPort == "8000" {
-		dataUrl := fmt.Sprintf("http://127.0.0.1:%s/trace1.data", r.DataPort)
-		//r.logger.Info("gen dataUrl", zap.String("dataUrl", dataUrl))
-		go r.ReadHttp(dataUrl)
+		//dataUrl := fmt.Sprintf("http://127.0.0.1:%s/trace1.data", r.DataPort)
+		////r.logger.Info("gen dataUrl", zap.String("dataUrl", dataUrl))
+		//go r.ReadHttp(dataUrl)
 
+		dataUrl2 := fmt.Sprintf("http://127.0.0.1:%s/trace2.data", r.DataPort)
+		//r.logger.Info("gen dataUrl", zap.String("dataUrl", dataUrl2))
+		go r.ReadHttp(dataUrl2)
+	}
+
+	if r.HttpPort == "8001" {
 		dataUrl2 := fmt.Sprintf("http://127.0.0.1:%s/trace2.data", r.DataPort)
 		//r.logger.Info("gen dataUrl", zap.String("dataUrl", dataUrl2))
 		go r.ReadHttp(dataUrl2)
@@ -200,7 +205,6 @@ func (r *Receiver) dropTrace(id string, duration time.Time, keep bool) {
 		r.idToTrace.Delete(id)
 	}
 
-	// check status
 	wrong := false
 	for _, span := range td.Sd {
 		if span.Wrong {
@@ -211,13 +215,12 @@ func (r *Receiver) dropTrace(id string, duration time.Time, keep bool) {
 	if wrong {
 		// send2compactor no keep
 		//r.logger.Info("send wrong id", zap.String("id", id))
-		//swUrl := fmt.Sprintf("http://127.0.0.1:%s/sw", r.CompactorPort)
-		//compactorReq.Post(swUrl).SendStruct(td).End()
-		b, _ := json.Marshal(td)
-		go func(_b []byte) {
-			swUrl := fmt.Sprintf("http://127.0.0.1:%s/sw", r.CompactorPort)
-			compactorReq.Post(swUrl).SendRawBytes(_b).End()
-		}(b)
+		swUrl := fmt.Sprintf("http://127.0.0.1:%s/sw", r.CompactorPort)
+		compactorReq.Post(swUrl).SendStruct(td).End()
+		//b, _ := json.Marshal(td)
+		//go func(_b []byte) {
+		//	compactorReq.Post(swUrl).SendRawBytes(_b).End()
+		//}(b)
 		return
 	}
 	// keep in cache tty 5s

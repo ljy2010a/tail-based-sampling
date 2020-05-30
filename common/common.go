@@ -63,7 +63,7 @@ func ParseSpanData(line []byte) *SpanData {
 type TraceData struct {
 	Sd     Spans
 	Id     string
-	Source string `json:"source"`
+	Source string `json:"s"`
 	sync.Mutex
 }
 
