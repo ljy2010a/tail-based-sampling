@@ -9,7 +9,6 @@ import (
 	"github.com/ljy2010a/tailf-based-sampling/common"
 	"github.com/smallnest/goreq"
 	"go.uber.org/zap"
-	"io/ioutil"
 	"net/http"
 	"sort"
 	"strings"
@@ -22,17 +21,16 @@ type Processor struct {
 }
 
 type Compactor struct {
-	HttpPort       string // 8003
-	DataPort       string // 8081
-	logger         *zap.Logger
-	maxNumTraces   uint64
-	numTracesOnMap uint64
-	deleteChan     chan string
-	finishChan     chan interface{}
-	gzipLen        int
-	checkSumMap    map[string]string
-	mu             sync.Mutex
-	closeTimes     int64
+	HttpPort string // 8003
+	DataPort string // 8081
+	logger   *zap.Logger
+
+	finishChan  chan interface{}
+	gzipLen     int
+	checkSumMap map[string]string
+	closeTimes  int64
+	resultChan  chan string
+	idToTrace   sync.Map
 }
 
 func (r *Compactor) Run() {
@@ -84,7 +82,7 @@ func (r *Compactor) Run() {
 		}
 	}()
 
-	r.deleteChan = make(chan string, 50000)
+	r.resultChan = make(chan string, 50000)
 	r.finishChan = make(chan interface{})
 	r.checkSumMap = make(map[string]string)
 	go r.finish()
@@ -127,47 +125,43 @@ func (r *Compactor) SetWrongHandler(c *gin.Context) {
 		return
 	}
 
-	anotherPort := ""
-	if td.Source == "8000" {
-		anotherPort = "8001"
-	} else {
-		anotherPort = "8000"
-	}
-	dataUrl := fmt.Sprintf("http://127.0.0.1:%s/qw?id=%s", anotherPort, td.Id)
-	resp, err := http.Get(dataUrl)
-	if err != nil {
-		r.logger.Info("get another wrong fail",
-			zap.String("id", td.Id),
-			zap.Error(err),
-		)
-	} else {
-		if resp.StatusCode == 200 {
-			body, _ := ioutil.ReadAll(resp.Body)
-			atd := &common.TraceData{}
-			err := json.Unmarshal(body, atd)
-			if err != nil {
-				r.logger.Info("parse another fail", zap.String("id", td.Id))
-			} else {
-				for _, span := range atd.Sd {
-					td.Sd = append(td.Sd, span)
-				}
-			}
+	tdi, exist := r.idToTrace.LoadOrStore(td.Id, td)
+	if !exist {
+		r.resultChan <- td.Id
+		// notify another
+		anotherPort := "8000"
+		if td.Source == "8000" {
+			anotherPort = "8001"
 		}
+		dataUrl := fmt.Sprintf("http://127.0.0.1:%s/qw?id=%s", anotherPort, td.Id)
+		resp, err := http.Get(dataUrl)
+		if err != nil {
+			r.logger.Info("get another wrong fail",
+				zap.String("id", td.Id),
+				zap.Error(err),
+			)
+		} else {
+			resp.Body.Close()
+		}
+	} else {
+		otd := tdi.(*common.TraceData)
+		otd.Add(td.Sd)
 	}
 
-	// query another wrong
-	if td.Id == "c074d0a90cd607b" {
-		r.logger.Info("example",
-			zap.Int("len", td.Sd.Len()),
-		)
-	}
-
-	sort.Sort(td.Sd)
-	checkSum := CompactMd5(td)
-	//r.checkSumMap[common.BytesToString(td.Sd[0].TraceId)] = checkSum
-	r.mu.Lock()
-	r.checkSumMap[td.Id] = checkSum
-	r.mu.Unlock()
+	//
+	//// query another wrong
+	//if td.Id == "c074d0a90cd607b" {
+	//	r.logger.Info("example",
+	//		zap.Int("len", td.Sd.Len()),
+	//	)
+	//}
+	//
+	//sort.Sort(td.Sd)
+	//checkSum := CompactMd5(td)
+	//r.mu.Lock()
+	//r.checkSumMap[td.Id] = checkSum
+	//r.mu.Unlock()
+	c.AbortWithStatus(http.StatusOK)
 	return
 }
 
@@ -182,11 +176,38 @@ func (r *Compactor) FinishNotifyHandler(c *gin.Context) {
 }
 
 func (r *Compactor) finish() {
-	// send result
 	for {
 		select {
 		case <-r.finishChan:
 			btime := time.Now()
+			for {
+				select {
+				case id := <-r.resultChan:
+					tdi, exist := r.idToTrace.Load(id)
+					if !exist {
+
+					} else {
+						td := tdi.(*common.TraceData)
+						if td.Id == "c074d0a90cd607b" {
+							r.logger.Info("example",
+								zap.Int("len", td.Sd.Len()),
+							)
+						}
+						sort.Sort(td.Sd)
+						checkSum := CompactMd5(td)
+						r.checkSumMap[td.Id] = checkSum
+					}
+				default:
+					r.logger.Info("gen checksum",
+						zap.Int("len", len(r.checkSumMap)),
+						zap.Duration("cost", time.Since(btime)),
+					)
+					goto FINAL
+				}
+			}
+
+		FINAL:
+			btime = time.Now()
 			r.logger.Info("example checksum",
 				zap.String("c074d0a90cd607b = C0BC243E017EF22CE16E1CA728EB98F5 ", r.checkSumMap["c074d0a90cd607b"]),
 			)
@@ -200,8 +221,6 @@ func (r *Compactor) finish() {
 				zap.Errors("err", err),
 			)
 			r.logger.Info("shutdown", zap.String("port", r.HttpPort))
-			//time.Sleep(10 * time.Second)
-			//os.Exit(0)
 			return
 		}
 	}

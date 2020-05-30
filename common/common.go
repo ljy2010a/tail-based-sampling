@@ -64,6 +64,7 @@ type TraceData struct {
 	Sd     Spans
 	Id     string
 	Source string `json:"s"`
+	Wrong  bool   `json:"-"`
 	sync.Mutex
 }
 

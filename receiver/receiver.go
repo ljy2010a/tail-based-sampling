@@ -3,6 +3,7 @@ package receiver
 import (
 	"fmt"
 	"github.com/gin-gonic/gin"
+	lru "github.com/hashicorp/golang-lru"
 	"github.com/ljy2010a/tailf-based-sampling/common"
 	"github.com/smallnest/goreq"
 	"go.uber.org/zap"
@@ -26,6 +27,9 @@ type Receiver struct {
 	gzipLen    int
 	closeTimes int64
 	sync.Mutex
+
+	wrongIdMap sync.Map
+	lruCache   *lru.Cache
 }
 
 var (
@@ -33,6 +37,7 @@ var (
 )
 
 func (r *Receiver) Run() {
+	var err error
 	r.logger, _ = zap.NewProduction()
 	defer r.logger.Sync()
 	go func() {
@@ -80,6 +85,13 @@ func (r *Receiver) Run() {
 				dataUrl := fmt.Sprintf("http://127.0.0.1:%s/trace1.data", r.DataPort)
 				go r.ReadHttp(dataUrl)
 
+				//dataUrl2 := fmt.Sprintf("http://127.0.0.1:%s/trace2.data", r.DataPort)
+				//go r.ReadHttp(dataUrl2)
+				return
+			}
+
+			if resp.StatusCode == 200 && r.HttpPort == "8001" {
+				r.DataPort = fmt.Sprintf("%d", port)
 				dataUrl2 := fmt.Sprintf("http://127.0.0.1:%s/trace2.data", r.DataPort)
 				go r.ReadHttp(dataUrl2)
 				return
@@ -87,7 +99,19 @@ func (r *Receiver) Run() {
 		}
 	}()
 
-	r.deleteChan = make(chan string, 100000)
+	//cache, err := ristretto.NewCache(&ristretto.Config{
+	//	NumCounters: 1e7,     // number of keys to track frequency of (10M).
+	//	MaxCost:     1 << 30, // maximum cost of cache (1GB).
+	//	BufferItems: 64,      // number of keys per Get buffer.
+	//})
+	r.lruCache, err = lru.New(100000)
+	if err != nil {
+		r.logger.Error("lru new fail",
+			zap.Error(err),
+		)
+	}
+
+	r.deleteChan = make(chan string, 30000)
 	r.finishChan = make(chan interface{})
 	go r.finish()
 
@@ -97,7 +121,7 @@ func (r *Receiver) Run() {
 	router.GET("/ready", r.ReadyHandler)
 	router.GET("/setParameter", r.SetParamHandler)
 	router.GET("/qw", r.QueryWrongHandler)
-	err := router.Run(fmt.Sprintf(":%s", r.HttpPort))
+	err = router.Run(fmt.Sprintf(":%s", r.HttpPort))
 	if err != nil {
 		r.logger.Info("r.HttpPort fail", zap.Error(err))
 	}
@@ -138,18 +162,54 @@ func (r *Receiver) SetParamHandler(c *gin.Context) {
 
 func (r *Receiver) QueryWrongHandler(c *gin.Context) {
 	id := c.DefaultQuery("id", "")
-	tdi, exist := r.idToTrace.Load(id)
-	if !exist {
-		c.AbortWithStatus(404)
-		return
-	}
-	td := tdi.(*common.TraceData)
-	if len(td.Sd) == 0 {
-		r.logger.Info("span expire",
+	r.wrongIdMap.Store(id, true)
+	if id == "c074d0a90cd607b" {
+		r.logger.Info("got wrong example notify",
 			zap.String("id", id),
 		)
 	}
-	c.JSON(http.StatusOK, td)
+	tdi, exist := r.idToTrace.Load(id)
+	if exist {
+		// 存在,表示缓存还在
+		// 等待过期即可
+		otd := tdi.(*common.TraceData)
+		otd.Wrong = true
+
+		// 已过期
+		//if len(otd.Sd) == 0 {
+		//r.logger.Info("expire id",
+		//	zap.String("id", id),
+		//	zap.String("port", r.HttpPort),
+		//)
+		//}
+
+	} else {
+		// 未出现
+		//r.logger.Info("no cache id",
+		//	zap.String("id", id),
+		//	zap.String("port", r.HttpPort),
+		//)
+		// 查找lru
+		ltdi, lexist := r.lruCache.Get(id)
+		if lexist {
+			//r.logger.Info(" id found in lru",
+			//	zap.String("id", id),
+			//	zap.String("port", r.HttpPort),
+			//)
+			//r.lruCache.Remove(id)
+			ltd := ltdi.(*common.TraceData)
+			go func() {
+				swUrl := fmt.Sprintf("http://127.0.0.1:%s/sw", r.CompactorPort)
+				compactorReq.Post(swUrl).SendStruct(ltd).End()
+			}()
+		} else {
+			//r.logger.Info(" id not in lru",
+			//	zap.String("id", id),
+			//	zap.String("port", r.HttpPort),
+			//)
+		}
+	}
+	c.JSON(http.StatusOK, "")
 	return
 }
 
@@ -157,10 +217,9 @@ func (r *Receiver) ConsumeTraceData(spans []*common.SpanData) {
 
 	idToSpans := make(map[string][]*common.SpanData)
 	for _, span := range spans {
-		//id := common.BytesToString(span.TraceId)
 		id := span.TraceId
 		idToSpans[id] = append(idToSpans[id], span)
-		//span.TraceId = ""
+		span.TraceId = ""
 	}
 
 	for id, spans := range idToSpans {
@@ -169,8 +228,8 @@ func (r *Receiver) ConsumeTraceData(spans []*common.SpanData) {
 			Id:     id,
 			Source: r.HttpPort,
 		}
-		d, loaded := r.idToTrace.LoadOrStore(id, initialTraceData)
-		if loaded {
+		d, exist := r.idToTrace.LoadOrStore(id, initialTraceData)
+		if exist {
 			// 已存在
 			//r.logger.Debug("exist id", zap.String("id", id))
 			td := d.(*common.TraceData)
@@ -190,7 +249,6 @@ func (r *Receiver) ConsumeTraceData(spans []*common.SpanData) {
 					}
 				}
 			}
-			//r.logger.Info(id)
 		}
 	}
 }
@@ -204,14 +262,24 @@ func (r *Receiver) dropTrace(id string, duration time.Time, keep bool) {
 		return
 	}
 	td := d.(*common.TraceData)
-	if !keep {
-		//r.idToTrace.Delete(id)
-		td.Sd = common.Spans{}
-	}
+	//if !keep {
+	r.idToTrace.Delete(id)
+	r.lruCache.Add(id, td)
+	//td.Sd = common.Spans{}
+	//}
 
-	wrong := false
+	wrong := td.Wrong
 	for _, span := range td.Sd {
 		if span.Wrong {
+			wrong = true
+		}
+	}
+
+	// 再次检测缓存map
+	if !wrong {
+		_, ok := r.wrongIdMap.Load(td.Id)
+		if ok {
+			// 遗漏
 			wrong = true
 		}
 	}

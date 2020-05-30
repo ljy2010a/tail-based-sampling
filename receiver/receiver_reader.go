@@ -111,6 +111,6 @@ func (r *Receiver) Read(rd io.Reader) {
 	)
 	//times := atomic.AddInt64(&r.closeTimes, 1)
 	//if times == 2 {
-		close(r.finishChan)
+	close(r.finishChan)
 	//}
 }
