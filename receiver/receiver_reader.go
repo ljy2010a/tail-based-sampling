@@ -10,7 +10,6 @@ import (
 	"io/ioutil"
 	"net/http"
 	"os"
-	"sync/atomic"
 	"time"
 )
 
@@ -110,8 +109,8 @@ func (r *Receiver) Read(rd io.Reader) {
 		zap.Int("gzipSize", r.gzipLen),
 		zap.Duration("cost", time.Since(btime)),
 	)
-	times := atomic.AddInt64(&r.closeTimes, 1)
-	if times == 2 {
+	//times := atomic.AddInt64(&r.closeTimes, 1)
+	//if times == 2 {
 		close(r.finishChan)
-	}
+	//}
 }

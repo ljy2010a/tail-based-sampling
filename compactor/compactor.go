@@ -9,10 +9,12 @@ import (
 	"github.com/ljy2010a/tailf-based-sampling/common"
 	"github.com/smallnest/goreq"
 	"go.uber.org/zap"
+	"io/ioutil"
 	"net/http"
 	"sort"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"time"
 )
 
@@ -30,6 +32,7 @@ type Compactor struct {
 	gzipLen        int
 	checkSumMap    map[string]string
 	mu             sync.Mutex
+	closeTimes     int64
 }
 
 func (r *Compactor) Run() {
@@ -43,8 +46,6 @@ func (r *Compactor) Run() {
 				close(r.finishChan)
 				r.finish()
 				return
-				//time.Sleep(10 * time.Second)
-				//os.Exit(0)
 			}
 			i++
 			r.logger.Info("sleep",
@@ -125,12 +126,42 @@ func (r *Compactor) SetWrongHandler(c *gin.Context) {
 		c.AbortWithStatus(http.StatusBadRequest)
 		return
 	}
+
+	anotherPort := ""
+	if td.Source == "8000" {
+		anotherPort = "8001"
+	} else {
+		anotherPort = "8000"
+	}
+	dataUrl := fmt.Sprintf("http://127.0.0.1:%s/qw?id=%s", anotherPort, td.Id)
+	resp, err := http.Get(dataUrl)
+	if err != nil {
+		r.logger.Info("get another wrong fail",
+			zap.String("id", td.Id),
+			zap.Error(err),
+		)
+	} else {
+		if resp.StatusCode == 200 {
+			body, _ := ioutil.ReadAll(resp.Body)
+			atd := &common.TraceData{}
+			err := json.Unmarshal(body, atd)
+			if err != nil {
+				r.logger.Info("parse another fail", zap.String("id", td.Id))
+			} else {
+				for _, span := range atd.Sd {
+					td.Sd = append(td.Sd, span)
+				}
+			}
+		}
+	}
+
 	// query another wrong
 	if td.Id == "c074d0a90cd607b" {
 		r.logger.Info("example",
 			zap.Int("len", td.Sd.Len()),
 		)
 	}
+
 	sort.Sort(td.Sd)
 	checkSum := CompactMd5(td)
 	//r.checkSumMap[common.BytesToString(td.Sd[0].TraceId)] = checkSum
@@ -143,7 +174,10 @@ func (r *Compactor) SetWrongHandler(c *gin.Context) {
 func (r *Compactor) FinishNotifyHandler(c *gin.Context) {
 	port := c.DefaultQuery("port", "")
 	r.logger.Info("got notify fin ", zap.String("port", port))
-	close(r.finishChan)
+	times := atomic.AddInt64(&r.closeTimes, 1)
+	if times == 2 {
+		close(r.finishChan)
+	}
 	return
 }
 

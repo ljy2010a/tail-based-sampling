@@ -87,12 +87,12 @@ func (r *Receiver) Run() {
 		}
 	}()
 
-	r.deleteChan = make(chan string, 80000)
+	r.deleteChan = make(chan string, 100000)
 	r.finishChan = make(chan interface{})
 	go r.finish()
 
-	router := gin.Default()
-	router.Use(gin.Logger())
+	router := gin.New()
+	//router.Use(gin.Logger())
 	router.Use(gin.Recovery())
 	router.GET("/ready", r.ReadyHandler)
 	router.GET("/setParameter", r.SetParamHandler)
@@ -118,13 +118,13 @@ func (r *Receiver) SetParamHandler(c *gin.Context) {
 	)
 	// 暂时用一个
 	if r.HttpPort == "8000" {
-		//dataUrl := fmt.Sprintf("http://127.0.0.1:%s/trace1.data", r.DataPort)
-		////r.logger.Info("gen dataUrl", zap.String("dataUrl", dataUrl))
-		//go r.ReadHttp(dataUrl)
+		dataUrl := fmt.Sprintf("http://127.0.0.1:%s/trace1.data", r.DataPort)
+		//r.logger.Info("gen dataUrl", zap.String("dataUrl", dataUrl))
+		go r.ReadHttp(dataUrl)
 
-		dataUrl2 := fmt.Sprintf("http://127.0.0.1:%s/trace2.data", r.DataPort)
-		//r.logger.Info("gen dataUrl", zap.String("dataUrl", dataUrl2))
-		go r.ReadHttp(dataUrl2)
+		//dataUrl2 := fmt.Sprintf("http://127.0.0.1:%s/trace2.data", r.DataPort)
+		////r.logger.Info("gen dataUrl", zap.String("dataUrl", dataUrl2))
+		//go r.ReadHttp(dataUrl2)
 	}
 
 	if r.HttpPort == "8001" {
@@ -137,16 +137,19 @@ func (r *Receiver) SetParamHandler(c *gin.Context) {
 }
 
 func (r *Receiver) QueryWrongHandler(c *gin.Context) {
-	traceId := c.DefaultQuery("id", "")
-	tdi, exist := r.idToTrace.Load(traceId)
-	if exist {
+	id := c.DefaultQuery("id", "")
+	tdi, exist := r.idToTrace.Load(id)
+	if !exist {
 		c.AbortWithStatus(404)
 		return
 	}
 	td := tdi.(*common.TraceData)
-	c.JSON(http.StatusOK, gin.H{
-		"td": td,
-	})
+	if len(td.Sd) == 0 {
+		r.logger.Info("span expire",
+			zap.String("id", id),
+		)
+	}
+	c.JSON(http.StatusOK, td)
 	return
 }
 
@@ -202,7 +205,8 @@ func (r *Receiver) dropTrace(id string, duration time.Time, keep bool) {
 	}
 	td := d.(*common.TraceData)
 	if !keep {
-		r.idToTrace.Delete(id)
+		//r.idToTrace.Delete(id)
+		td.Sd = common.Spans{}
 	}
 
 	wrong := false

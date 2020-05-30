@@ -7,9 +7,15 @@ import (
 )
 
 func main() {
-	receiver := receiver.Receiver{
+	rr := receiver.Receiver{
 		HttpPort:      "8000",
-		//DataPort:      "8081",
+		DataPort:      "8081",
+		CompactorPort: "8002",
+	}
+
+	rr2 := receiver.Receiver{
+		HttpPort:      "8001",
+		DataPort:      "8081",
 		CompactorPort: "8002",
 	}
 
@@ -19,7 +25,8 @@ func main() {
 	}
 
 	go compactor.Run()
-	go receiver.Run()
+	go rr.Run()
+	go rr2.Run()
 	time.Sleep(1 * time.Second)
 	//receiver.ReadMem("/Users/liangjunyu/Desktop/trace1.data")
 	//receiver.ReadMem("/Users/liangjunyu/Desktop/trace1b.data")
