@@ -4,7 +4,6 @@ import (
 	"bufio"
 	"bytes"
 	"fmt"
-	"github.com/ljy2010a/tailf-based-sampling/common"
 	"go.uber.org/zap"
 	"io"
 	"io/ioutil"
@@ -62,14 +61,9 @@ func (r *Receiver) Read(rd io.Reader) {
 	br := bufio.NewReaderSize(rd, 4096)
 	size := 0
 	total := 0
-	wrong := 0
-	groupNum := 500
-	spanDatas := make([]*common.SpanData, groupNum)
-	i := 0
 	go func() {
 		r.logger.Info("read stat",
 			zap.Int("total", total),
-			zap.Int("wrong", wrong),
 		)
 		time.Sleep(10 * time.Second)
 	}()
@@ -80,37 +74,12 @@ func (r *Receiver) Read(rd io.Reader) {
 		}
 		size += len(line)
 		total++
-		spanData := common.ParseSpanData(line)
-		if spanData == nil {
-			//fmt.Printf("nil : %s\n", string(line))
-			continue
-		}
-		if spanData.Wrong {
-			//fmt.Printf("err : %s\n", string(line))
-			wrong++
-		}
-		if i < groupNum {
-			spanDatas[i] = spanData
-		}
-		if i == groupNum-1 {
-			r.ConsumeTraceData(spanDatas)
-			i = 0
-			continue
-		}
-		i++
-	}
-	if i != 0 {
-		r.ConsumeTraceData(spanDatas[:i])
+		r.lineChan <- string(line)
 	}
 	r.logger.Info("read file done ",
 		zap.Int("total", total),
-		zap.Int("wrong", wrong),
 		zap.Int("sourceSize", size),
-		zap.Int("gzipSize", r.gzipLen),
 		zap.Duration("cost", time.Since(btime)),
 	)
-	//times := atomic.AddInt64(&r.closeTimes, 1)
-	//if times == 2 {
-	close(r.finishChan)
-	//}
+	close(r.lineChan)
 }

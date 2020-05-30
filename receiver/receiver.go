@@ -10,26 +10,27 @@ import (
 	"net/http"
 	"os"
 	"sync"
+	"sync/atomic"
 	"time"
 )
 
 type Receiver struct {
-	HttpPort       string // 8000,8001
-	DataPort       string // 8081
-	CompactorPort  string // 8002
-	logger         *zap.Logger
-	idToTrace      sync.Map
-	maxNumTraces   uint64
-	numTracesOnMap uint64
+	HttpPort      string // 8000,8001
+	DataPort      string // 8081
+	CompactorPort string // 8002
+	logger        *zap.Logger
+	idToTrace     sync.Map
 
-	deleteChan chan string
-	finishChan chan interface{}
-	gzipLen    int
-	closeTimes int64
+	deleteChan   chan string
+	finishChan   chan interface{}
+	readDoneChan chan interface{}
+	gzipLen      int
+	closeTimes   int64
 	sync.Mutex
 
 	wrongIdMap sync.Map
 	lruCache   *lru.Cache
+	lineChan   chan string
 }
 
 var (
@@ -111,9 +112,13 @@ func (r *Receiver) Run() {
 		)
 	}
 
+	r.lineChan = make(chan string, 50000)
 	r.deleteChan = make(chan string, 30000)
 	r.finishChan = make(chan interface{})
+	r.readDoneChan = make(chan interface{})
 	go r.finish()
+	go r.ConsumeTraceByteAsync()
+	go r.ConsumeTraceByteAsync()
 
 	router := gin.New()
 	//router.Use(gin.Logger())
@@ -253,9 +258,54 @@ func (r *Receiver) ConsumeTraceData(spans []*common.SpanData) {
 	}
 }
 
+func (r *Receiver) ConsumeTraceByteAsync() {
+	btime := time.Now()
+	size := 0
+	wrong := 0
+	groupNum := 500
+	spanDatas := make([]*common.SpanData, groupNum)
+	i := 0
+	go func() {
+		r.logger.Info("read stat",
+			zap.Int("wrong", wrong),
+		)
+		time.Sleep(10 * time.Second)
+	}()
+	for line := range r.lineChan {
+		spanData := common.ParseSpanData2(line)
+		if spanData == nil {
+			continue
+		}
+		if spanData.Wrong {
+			wrong++
+		}
+		if i < groupNum {
+			spanDatas[i] = spanData
+		}
+		if i == groupNum-1 {
+			r.ConsumeTraceData(spanDatas)
+			i = 0
+			continue
+		}
+		i++
+	}
+	if i != 0 {
+		r.ConsumeTraceData(spanDatas[:i])
+	}
+	r.logger.Info("deal file done ",
+		zap.Int("wrong", wrong),
+		zap.Int("dealSize", size),
+		zap.Duration("cost", time.Since(btime)),
+	)
+	times := atomic.AddInt64(&r.closeTimes, 1)
+	if times == 2 {
+		close(r.finishChan)
+	}
+}
+
 func (r *Receiver) dropTrace(id string, duration time.Time, keep bool) {
-	r.Lock()
-	defer r.Unlock()
+	//r.Lock()
+	//defer r.Unlock()
 	d, ok := r.idToTrace.Load(id)
 	if !ok {
 		r.logger.Error("drop id not exist", zap.String("id", id))
@@ -307,13 +357,16 @@ func (r *Receiver) dropTrace(id string, duration time.Time, keep bool) {
 
 func (r *Receiver) finish() {
 	<-r.finishChan
+	btime := time.Now()
 	r.logger.Info("start clear less")
 	for {
 		select {
 		case id := <-r.deleteChan:
 			r.dropTrace(id, time.Now(), true)
 		default:
-			r.logger.Info("clear less succ")
+			r.logger.Info("clear less succ",
+				zap.Duration("cost", time.Since(btime)),
+			)
 			r.notifyFIN()
 			return
 		}
@@ -328,6 +381,4 @@ func (r *Receiver) notifyFIN() {
 		zap.Errors("err", err),
 	)
 	r.logger.Info("shutdown", zap.String("port", r.HttpPort))
-	//time.Sleep(10 * time.Second)
-	//os.Exit(0)
 }

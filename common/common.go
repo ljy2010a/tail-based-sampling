@@ -45,7 +45,33 @@ func ParseSpanData(line []byte) *SpanData {
 	spanData.TraceId = words[0]
 	st, err := strconv.ParseInt(words[1], 10, 64)
 	if err != nil {
-		fmt.Printf("timestamp to int64 fail %v", words[1])
+		fmt.Printf("timestamp to int64 fail %v \n", words[1])
+		return nil
+	}
+	spanData.StartTime = st
+	//firstIdx := bytes.Index(line, S1)
+	//spanData.TraceId = line[:firstIdx]
+	//secondIdx := bytes.Index(line[firstIdx:],S1)
+	//spanData.StartTime = 0
+	spanData.Tags = lineStr
+	if (bytes.Contains(line, FCode) && !bytes.Contains(line, FCode200)) || bytes.Contains(line, Ferr1) {
+		spanData.Wrong = true
+	}
+	return spanData
+}
+
+func ParseSpanData2(lineStr string) *SpanData {
+	spanData := &SpanData{}
+	//fmt.Println(lineStr)
+	line := []byte(lineStr)
+	words := strings.Split(lineStr, "|")
+	if len(words) < 3 {
+		return nil
+	}
+	spanData.TraceId = words[0]
+	st, err := strconv.ParseInt(words[1], 10, 64)
+	if err != nil {
+		fmt.Printf("timestamp to int64 fail %v \n", words[1])
 		return nil
 	}
 	spanData.StartTime = st
