@@ -74,7 +74,9 @@ func (r *Receiver) Read(rd io.Reader) {
 		}
 		size += len(line)
 		total++
-		r.lineChan <- string(line)
+		nline := make([]byte, len(line))
+		copy(nline, line)
+		r.lineChan <- nline
 	}
 	r.logger.Info("read file done ",
 		zap.Int("total", total),

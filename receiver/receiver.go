@@ -21,16 +21,14 @@ type Receiver struct {
 	logger        *zap.Logger
 	idToTrace     sync.Map
 
-	deleteChan   chan string
-	finishChan   chan interface{}
-	readDoneChan chan interface{}
-	gzipLen      int
-	closeTimes   int64
+	deleteChan chan string
+	finishChan chan interface{}
+	closeTimes int64
 	sync.Mutex
 
 	wrongIdMap sync.Map
 	lruCache   *lru.Cache
-	lineChan   chan string
+	lineChan   chan []byte
 }
 
 var (
@@ -112,10 +110,9 @@ func (r *Receiver) Run() {
 		)
 	}
 
-	r.lineChan = make(chan string, 50000)
+	r.lineChan = make(chan []byte, 50000)
 	r.deleteChan = make(chan string, 30000)
 	r.finishChan = make(chan interface{})
-	r.readDoneChan = make(chan interface{})
 	go r.finish()
 	go r.ConsumeTraceByteAsync()
 	go r.ConsumeTraceByteAsync()
@@ -271,8 +268,12 @@ func (r *Receiver) ConsumeTraceByteAsync() {
 		)
 		time.Sleep(10 * time.Second)
 	}()
+	once := sync.Once{}
 	for line := range r.lineChan {
-		spanData := common.ParseSpanData2(line)
+		once.Do(func() {
+			btime = time.Now()
+		})
+		spanData := common.ParseSpanData(line)
 		if spanData == nil {
 			continue
 		}
@@ -345,14 +346,6 @@ func (r *Receiver) dropTrace(id string, duration time.Time, keep bool) {
 		//}(b)
 		return
 	}
-	// keep in cache tty 5s
-
-	//ret, err := common.GzipTd(td)
-	//if err != nil {
-	//	r.logger.Error("GzipTd err", zap.Error(err))
-	//	return
-	//}
-	//r.gzipLen += len(ret)
 }
 
 func (r *Receiver) finish() {

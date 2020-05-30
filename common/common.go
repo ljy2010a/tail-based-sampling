@@ -35,9 +35,7 @@ var (
 
 func ParseSpanData(line []byte) *SpanData {
 	spanData := &SpanData{}
-
 	lineStr := string(line)
-	//fmt.Println(lineStr)
 	words := strings.Split(lineStr, "|")
 	if len(words) < 3 {
 		return nil
@@ -54,7 +52,11 @@ func ParseSpanData(line []byte) *SpanData {
 	//secondIdx := bytes.Index(line[firstIdx:],S1)
 	//spanData.StartTime = 0
 	spanData.Tags = lineStr
-	if (bytes.Contains(line, FCode) && !bytes.Contains(line, FCode200)) || bytes.Contains(line, Ferr1) {
+	if bytes.Contains(line, Ferr1) {
+		spanData.Wrong = true
+		return spanData
+	}
+	if bytes.Contains(line, FCode) && !bytes.Contains(line, FCode200) {
 		spanData.Wrong = true
 	}
 	return spanData
@@ -80,7 +82,11 @@ func ParseSpanData2(lineStr string) *SpanData {
 	//secondIdx := bytes.Index(line[firstIdx:],S1)
 	//spanData.StartTime = 0
 	spanData.Tags = lineStr
-	if (bytes.Contains(line, FCode) && !bytes.Contains(line, FCode200)) || bytes.Contains(line, Ferr1) {
+	if bytes.Contains(line, Ferr1) {
+		spanData.Wrong = true
+		return spanData
+	}
+	if bytes.Contains(line, FCode) && !bytes.Contains(line, FCode200) {
 		spanData.Wrong = true
 	}
 	return spanData

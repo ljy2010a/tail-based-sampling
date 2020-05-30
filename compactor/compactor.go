@@ -26,7 +26,6 @@ type Compactor struct {
 	logger   *zap.Logger
 
 	finishChan  chan interface{}
-	gzipLen     int
 	checkSumMap map[string]string
 	closeTimes  int64
 	resultChan  chan string
@@ -147,20 +146,6 @@ func (r *Compactor) SetWrongHandler(c *gin.Context) {
 		otd := tdi.(*common.TraceData)
 		otd.Add(td.Sd)
 	}
-
-	//
-	//// query another wrong
-	//if td.Id == "c074d0a90cd607b" {
-	//	r.logger.Info("example",
-	//		zap.Int("len", td.Sd.Len()),
-	//	)
-	//}
-	//
-	//sort.Sort(td.Sd)
-	//checkSum := CompactMd5(td)
-	//r.mu.Lock()
-	//r.checkSumMap[td.Id] = checkSum
-	//r.mu.Unlock()
 	c.AbortWithStatus(http.StatusOK)
 	return
 }
@@ -176,54 +161,51 @@ func (r *Compactor) FinishNotifyHandler(c *gin.Context) {
 }
 
 func (r *Compactor) finish() {
+	<-r.finishChan
+
+	btime := time.Now()
 	for {
 		select {
-		case <-r.finishChan:
-			btime := time.Now()
-			for {
-				select {
-				case id := <-r.resultChan:
-					tdi, exist := r.idToTrace.Load(id)
-					if !exist {
+		case id := <-r.resultChan:
+			tdi, exist := r.idToTrace.Load(id)
+			if !exist {
 
-					} else {
-						td := tdi.(*common.TraceData)
-						if td.Id == "c074d0a90cd607b" {
-							r.logger.Info("example",
-								zap.Int("len", td.Sd.Len()),
-							)
-						}
-						sort.Sort(td.Sd)
-						checkSum := CompactMd5(td)
-						r.checkSumMap[td.Id] = checkSum
-					}
-				default:
-					r.logger.Info("gen checksum",
-						zap.Int("len", len(r.checkSumMap)),
-						zap.Duration("cost", time.Since(btime)),
+			} else {
+				td := tdi.(*common.TraceData)
+				if td.Id == "c074d0a90cd607b" {
+					r.logger.Info("example",
+						zap.Int("len", td.Sd.Len()),
 					)
-					goto FINAL
 				}
+				sort.Sort(td.Sd)
+				checkSum := CompactMd5(td)
+				r.checkSumMap[td.Id] = checkSum
 			}
-
-		FINAL:
-			btime = time.Now()
-			r.logger.Info("example checksum",
-				zap.String("c074d0a90cd607b = C0BC243E017EF22CE16E1CA728EB98F5 ", r.checkSumMap["c074d0a90cd607b"]),
-			)
-			b, _ := json.Marshal(r.checkSumMap)
-			content := "result=" + string(b)
-			_, body, err := goreq.New().Post(fmt.Sprintf("http://127.0.0.1:%s/api/finished", r.DataPort)).SendMapString(content).End()
-			r.logger.Info("report checksum",
+		default:
+			r.logger.Info("gen checksum",
 				zap.Int("len", len(r.checkSumMap)),
 				zap.Duration("cost", time.Since(btime)),
-				zap.String("body", body),
-				zap.Errors("err", err),
 			)
-			r.logger.Info("shutdown", zap.String("port", r.HttpPort))
-			return
+			goto FINAL
 		}
 	}
+
+FINAL:
+	btime = time.Now()
+	r.logger.Info("example checksum",
+		zap.String("c074d0a90cd607b = C0BC243E017EF22CE16E1CA728EB98F5 ", r.checkSumMap["c074d0a90cd607b"]),
+	)
+	b, _ := json.Marshal(r.checkSumMap)
+	content := "result=" + string(b)
+	_, body, err := goreq.New().Post(fmt.Sprintf("http://127.0.0.1:%s/api/finished", r.DataPort)).SendMapString(content).End()
+	r.logger.Info("report checksum",
+		zap.Int("len", len(r.checkSumMap)),
+		zap.Duration("cost", time.Since(btime)),
+		zap.String("body", body),
+		zap.Errors("err", err),
+	)
+	r.logger.Info("shutdown", zap.String("port", r.HttpPort))
+	return
 }
 
 func CompactMd5(td *common.TraceData) string {
