@@ -3,6 +3,7 @@ package receiver
 import (
 	"bufio"
 	"bytes"
+	"fmt"
 	"github.com/ljy2010a/tailf-based-sampling/common"
 	"go.uber.org/zap"
 	"io"
@@ -52,6 +53,12 @@ func (r *Receiver) ReadHttp(fileUrl string) {
 
 func (r *Receiver) Read(rd io.Reader) {
 	r.logger.Info("read read")
+	defer func() {
+		err := recover()
+		if err != nil {
+			r.logger.Error("", zap.String("err", fmt.Sprintf("%v", err)))
+		}
+	}()
 	btime := time.Now()
 	br := bufio.NewReaderSize(rd, 4096)
 	size := 0
@@ -61,11 +68,11 @@ func (r *Receiver) Read(rd io.Reader) {
 	spanDatas := make([]*common.SpanData, groupNum)
 	i := 0
 	go func() {
-		time.Sleep(10 * time.Second)
 		r.logger.Info("read stat",
 			zap.Int("total", total),
 			zap.Int("wrong", wrong),
 		)
+		time.Sleep(10 * time.Second)
 	}()
 	for {
 		line, _, c := br.ReadLine()
@@ -74,7 +81,6 @@ func (r *Receiver) Read(rd io.Reader) {
 		}
 		size += len(line)
 		total++
-		//continue
 		spanData := common.ParseSpanData(line)
 		if spanData == nil {
 			//fmt.Printf("nil : %s\n", string(line))

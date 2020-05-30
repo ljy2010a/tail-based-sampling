@@ -38,7 +38,7 @@ func (r *Compactor) Run() {
 	go func() {
 		i := 0
 		for {
-			if i > 2 {
+			if i > 4 {
 				r.logger.Info("too long to stop")
 				close(r.finishChan)
 				r.finish()
@@ -108,7 +108,7 @@ func (r *Compactor) ReadyHandler(c *gin.Context) {
 }
 
 func (r *Compactor) SetParamHandler(c *gin.Context) {
-	port := c.DefaultQuery("port", "8081")
+	port := c.DefaultQuery("port", "")
 	r.DataPort = port
 	r.logger.Info("SetParamHandler",
 		zap.String("port", r.HttpPort),
@@ -127,8 +127,8 @@ func (r *Compactor) SetWrongHandler(c *gin.Context) {
 	}
 	// query another wrong
 	if td.Id == "c074d0a90cd607b" {
-		r.logger.Info("example ",
-			zap.Int("len ", td.Sd.Len()),
+		r.logger.Info("example",
+			zap.Int("len", td.Sd.Len()),
 		)
 	}
 	sort.Sort(td.Sd)
@@ -142,7 +142,7 @@ func (r *Compactor) SetWrongHandler(c *gin.Context) {
 
 func (r *Compactor) FinishNotifyHandler(c *gin.Context) {
 	port := c.DefaultQuery("port", "")
-	r.logger.Info("notify fin ", zap.String("port", port))
+	r.logger.Info("got notify fin ", zap.String("port", port))
 	close(r.finishChan)
 	return
 }

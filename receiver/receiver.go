@@ -39,7 +39,7 @@ func (r *Receiver) Run() {
 	go func() {
 		i := 0
 		for {
-			if i > 2 {
+			if i > 4 {
 				r.logger.Info("too long to stop")
 				time.Sleep(10 * time.Second)
 				os.Exit(0)
@@ -152,7 +152,7 @@ func (r *Receiver) ConsumeTraceData(spans []*common.SpanData) {
 		//id := common.BytesToString(span.TraceId)
 		id := span.TraceId
 		idToSpans[id] = append(idToSpans[id], span)
-		span.TraceId = ""
+		//span.TraceId = ""
 	}
 
 	for id, spans := range idToSpans {
@@ -211,6 +211,8 @@ func (r *Receiver) dropTrace(id string, duration time.Time, keep bool) {
 	if wrong {
 		// send2compactor no keep
 		//r.logger.Info("send wrong id", zap.String("id", id))
+		//swUrl := fmt.Sprintf("http://127.0.0.1:%s/sw", r.CompactorPort)
+		//compactorReq.Post(swUrl).SendStruct(td).End()
 		b, _ := json.Marshal(td)
 		go func(_b []byte) {
 			swUrl := fmt.Sprintf("http://127.0.0.1:%s/sw", r.CompactorPort)
@@ -245,8 +247,8 @@ func (r *Receiver) finish() {
 
 func (r *Receiver) notifyFIN() {
 	// send fin
-	_, body, err := compactorReq.Get(fmt.Sprintf("http://127.0.0.1:%s/fn", r.CompactorPort)).End()
-	r.logger.Info("notify FIN",
+	_, body, err := compactorReq.Get(fmt.Sprintf("http://127.0.0.1:%s/fn?port=%s", r.CompactorPort, r.HttpPort)).End()
+	r.logger.Info("send notify fin",
 		zap.String("body", body),
 		zap.Errors("err", err),
 	)
