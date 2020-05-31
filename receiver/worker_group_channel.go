@@ -2,7 +2,6 @@ package receiver
 
 import (
 	"bufio"
-	"fmt"
 	"github.com/ljy2010a/tailf-based-sampling/common"
 	"go.uber.org/zap"
 	"io"
@@ -23,12 +22,12 @@ type ChannelGroupConsume struct {
 }
 
 func NewChannelGroupConsume(receiver *Receiver, f func()) *ChannelGroupConsume {
-	// 200w = 12s
-	//
+	// 300w = 10.67s , 13.15s
+	// 350w = 9.76s , 12.73s
 	return &ChannelGroupConsume{
 		receiver:     receiver,
 		logger:       receiver.logger,
-		lineChan:     make(chan [][]byte, 6000),
+		lineChan:     make(chan [][]byte, 7000),
 		lineGroupNum: 500,
 		groupNum:     5000,
 		workNum:      2,
@@ -38,22 +37,22 @@ func NewChannelGroupConsume(receiver *Receiver, f func()) *ChannelGroupConsume {
 
 func (c *ChannelGroupConsume) Read(rd io.Reader) {
 	c.logger.Info("read start")
-	defer func() {
-		err := recover()
-		if err != nil {
-			c.logger.Error("", zap.String("err", fmt.Sprintf("%v", err)))
-		}
-	}()
+	//defer func() {
+	//	err := recover()
+	//	if err != nil {
+	//		c.logger.Error("", zap.String("err", fmt.Sprintf("%v", err)))
+	//	}
+	//}()
 	btime := time.Now()
 	br := bufio.NewReaderSize(rd, 8192)
 	size := 0
 	total := 0
-	go func() {
-		c.logger.Info("read stat",
-			zap.Int("total", total),
-		)
-		time.Sleep(10 * time.Second)
-	}()
+	//go func() {
+	//	c.logger.Info("read stat",
+	//		zap.Int("total", total),
+	//	)
+	//	time.Sleep(10 * time.Second)
+	//}()
 	i := 0
 	lines := make([][]byte, c.lineGroupNum)
 	for {

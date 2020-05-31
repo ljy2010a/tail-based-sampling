@@ -10,7 +10,7 @@ import (
 )
 
 func main() {
-	fmt.Println(VERSION, time.Now().Format("2006-01-02 15:04:05"))
+	fmt.Println(VERSION, time.Now().Format("2006-01-02 15:04:05"), time.Now().Unix())
 
 	rand.Seed(time.Now().Unix())
 	var httpPort string

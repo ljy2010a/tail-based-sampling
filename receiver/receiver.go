@@ -100,14 +100,14 @@ func (r *Receiver) Run() {
 
 	// 13*20*2.9 = 754
 	// 300 * 2.9 = 870
-	r.lruCache, err = lru.New(8_0000)
+	r.lruCache, err = lru.New(7_0000)
 	if err != nil {
 		r.logger.Error("lru new fail",
 			zap.Error(err),
 		)
 	}
 
-	r.deleteChan = make(chan string, 1_0000)
+	r.deleteChan = make(chan string, 9000)
 	r.finishChan = make(chan interface{})
 	doneFunc := func() {
 		close(r.finishChan)
@@ -142,20 +142,17 @@ func (r *Receiver) SetParamHandler(c *gin.Context) {
 		zap.String("port", r.HttpPort),
 		zap.String("set", r.DataPort),
 	)
-	// 暂时用一个
+
 	if r.HttpPort == "8000" {
 		dataUrl := fmt.Sprintf("http://127.0.0.1:%s/trace1.data", r.DataPort)
-		//r.logger.Info("gen dataUrl", zap.String("dataUrl", dataUrl))
 		go r.ReadHttp(dataUrl)
 
 		//dataUrl2 := fmt.Sprintf("http://127.0.0.1:%s/trace2.data", r.DataPort)
-		////r.logger.Info("gen dataUrl", zap.String("dataUrl", dataUrl2))
 		//go r.ReadHttp(dataUrl2)
 	}
 
 	if r.HttpPort == "8001" {
 		dataUrl2 := fmt.Sprintf("http://127.0.0.1:%s/trace2.data", r.DataPort)
-		//r.logger.Info("gen dataUrl", zap.String("dataUrl", dataUrl2))
 		go r.ReadHttp(dataUrl2)
 	}
 	c.JSON(http.StatusOK, "ok")
@@ -186,11 +183,6 @@ func (r *Receiver) QueryWrongHandler(c *gin.Context) {
 		//}
 
 	} else {
-		// 未出现
-		//r.logger.Info("no cache id",
-		//	zap.String("id", id),
-		//	zap.String("port", r.HttpPort),
-		//)
 		// 查找lru
 		ltdi, lexist := r.lruCache.Get(id)
 		if lexist {
@@ -326,7 +318,6 @@ func (r *Receiver) notifyFIN() {
 		r.logger.Info("send notify fin",
 			zap.Int("code", body.StatusCode),
 		)
-		r.logger.Info("shutdown", zap.String("port", r.HttpPort))
 	}
 
 }

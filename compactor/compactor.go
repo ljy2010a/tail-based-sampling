@@ -146,6 +146,7 @@ func (r *Compactor) SetWrongHandler(c *gin.Context) {
 	} else {
 		otd := tdi.(*common.TraceData)
 		otd.Add(td.Sd)
+		// cal
 	}
 	c.AbortWithStatus(http.StatusOK)
 	return
@@ -219,7 +220,6 @@ FINAL:
 		zap.Int("len", i),
 		zap.Duration("cost", time.Since(btime)),
 	)
-	r.logger.Info("shutdown", zap.String("port", r.HttpPort))
 	return
 }
 
