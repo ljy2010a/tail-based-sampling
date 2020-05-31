@@ -96,14 +96,18 @@ func (r *Receiver) Run() {
 		}
 	}()
 
-	r.lruCache, err = lru.New(100000)
+	// 10000条 = 2.9MB
+
+	// 13*20*2.9 = 754
+	// 300 * 2.9 = 870
+	r.lruCache, err = lru.New(8_0000)
 	if err != nil {
 		r.logger.Error("lru new fail",
 			zap.Error(err),
 		)
 	}
 
-	r.deleteChan = make(chan string, 30000)
+	r.deleteChan = make(chan string, 1_0000)
 	r.finishChan = make(chan interface{})
 	doneFunc := func() {
 		close(r.finishChan)
@@ -232,7 +236,6 @@ func (r *Receiver) ConsumeTraceData(spans common.Spans) {
 			td.Add(spans)
 		} else {
 			postDeletion := false
-			currTime := time.Now()
 			// 淘汰一个
 			for !postDeletion {
 				select {
@@ -241,7 +244,7 @@ func (r *Receiver) ConsumeTraceData(spans common.Spans) {
 				default:
 					dropId, ok := <-r.deleteChan
 					if ok {
-						r.dropTrace(dropId, currTime, false)
+						r.dropTrace(dropId, false)
 					}
 				}
 			}
@@ -249,7 +252,7 @@ func (r *Receiver) ConsumeTraceData(spans common.Spans) {
 	}
 }
 
-func (r *Receiver) dropTrace(id string, duration time.Time, keep bool) {
+func (r *Receiver) dropTrace(id string, keep bool) {
 	atomic.AddInt64(&r.traceNums, 1)
 
 	d, ok := r.idToTrace.Load(id)
@@ -259,8 +262,8 @@ func (r *Receiver) dropTrace(id string, duration time.Time, keep bool) {
 	}
 	td := d.(*common.TraceData)
 	//if !keep {
-	r.idToTrace.Delete(id)
 	r.lruCache.Add(id, td)
+	r.idToTrace.Delete(id)
 	//td.Sd = common.Spans{}
 	//}
 
@@ -299,7 +302,7 @@ func (r *Receiver) finish() {
 	for {
 		select {
 		case id := <-r.deleteChan:
-			r.dropTrace(id, time.Now(), true)
+			r.dropTrace(id, true)
 		default:
 			r.logger.Info("clear less succ",
 				zap.Duration("cost", time.Since(btime)),

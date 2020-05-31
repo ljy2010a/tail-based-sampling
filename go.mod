@@ -9,7 +9,6 @@ require (
 	github.com/klauspost/compress v1.8.3 // indirect
 	github.com/moul/http2curl v1.0.0 // indirect
 	github.com/pkg/errors v0.8.1 // indirect
-	github.com/smallnest/goreq v0.0.0-20180727030113-2e3372c80388
 	github.com/smartystreets-prototypes/go-disruptor v0.0.0-20200316140655-c96477fd7a6a // indirect
 	github.com/stretchr/testify v1.4.0 // indirect
 	github.com/valyala/fasthttp v1.5.0

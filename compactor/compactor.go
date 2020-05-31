@@ -165,6 +165,10 @@ func (r *Compactor) finish() {
 	<-r.finishChan
 
 	btime := time.Now()
+	sb := strings.Builder{}
+	sb.WriteString("result={")
+	start := true
+	i := 0
 	for {
 		select {
 		case id := <-r.resultChan:
@@ -178,8 +182,20 @@ func (r *Compactor) finish() {
 						zap.Int("len", td.Sd.Len()),
 					)
 				}
+				i++
+				// {"c074d0a90cd607b":"C0BC243E017EF22CE16E1CA728EB98F5",
 				checkSum := CompactMd5(td)
-				r.checkSumMap[td.Id] = checkSum
+				if !start {
+					sb.WriteString(",\"")
+				} else {
+					sb.WriteString("\"")
+					start = false
+				}
+				sb.WriteString(td.Id)
+				sb.WriteString("\":\"")
+				sb.WriteString(checkSum)
+				sb.WriteString("\"")
+				//r.checkSumMap[td.Id] = checkSum
 			}
 		default:
 			r.logger.Info("gen checksum",
@@ -191,22 +207,16 @@ func (r *Compactor) finish() {
 	}
 
 FINAL:
+	sb.WriteString("}")
 	btime = time.Now()
-	r.logger.Info("example checksum",
-		zap.String("c074d0a90cd607b = C0BC243E017EF22CE16E1CA728EB98F5 ", r.checkSumMap["c074d0a90cd607b"]),
-	)
-	//b, _ := json.Marshal(r.checkSumMap)
-	//content := "result=" + string(b)
-	//_, body, err := goreq.New().Post(r.ReportUrl).SendMapString(content).End()
-	//r.logger.Info("report checksum",
-	//	zap.Int("len", len(r.checkSumMap)),
-	//	zap.Duration("cost", time.Since(btime)),
-	//	zap.String("body", body),
-	//	zap.Errors("err", err),
+	//r.logger.Info(sb.String())
+	//r.logger.Info("example checksum",
+	//	zap.String("c074d0a90cd607b = C0BC243E017EF22CE16E1CA728EB98F5 ", r.checkSumMap["c074d0a90cd607b"]),
 	//)
-	ReportCheckSum(r.checkSumMap, r.ReportUrl)
+	//ReportCheckSum(r.checkSumMap, r.ReportUrl)
+	ReportCheckSumString(sb.String(), r.ReportUrl)
 	r.logger.Info("report checksum",
-		zap.Int("len", len(r.checkSumMap)),
+		zap.Int("len", i),
 		zap.Duration("cost", time.Since(btime)),
 	)
 	r.logger.Info("shutdown", zap.String("port", r.HttpPort))
