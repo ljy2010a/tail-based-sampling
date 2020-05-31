@@ -117,6 +117,7 @@ func (r *Compactor) SetParamHandler(c *gin.Context) {
 }
 
 func (r *Compactor) SetWrongHandler(c *gin.Context) {
+	over := c.DefaultQuery("over", "0")
 	td := &common.TraceData{}
 	err := c.BindJSON(&td)
 	if err != nil {
@@ -132,21 +133,13 @@ func (r *Compactor) SetWrongHandler(c *gin.Context) {
 		if td.Source == "8000" {
 			anotherPort = "8001"
 		}
-		reportUrl := fmt.Sprintf("http://127.0.0.1:%s/qw?id=%s", anotherPort, td.Id)
+		reportUrl := fmt.Sprintf("http://127.0.0.1:%s/qw?id=%s&over=%s", anotherPort, td.Id, over)
 		NotifyAnotherWrong(reportUrl)
-		//resp, err := http.Get(dataUrl)
-		//if err != nil {
-		//	r.logger.Info("get another wrong fail",
-		//		zap.String("id", td.Id),
-		//		zap.Error(err),
-		//	)
-		//} else {
-		//	resp.Body.Close()
-		//}
 	} else {
 		otd := tdi.(*common.TraceData)
 		otd.Add(td.Sd)
-		// cal
+		// check sum
+		otd.Md5 = CompactMd5(otd)
 	}
 	c.AbortWithStatus(http.StatusOK)
 	return
@@ -170,44 +163,73 @@ func (r *Compactor) finish() {
 	sb.WriteString("result={")
 	start := true
 	i := 0
-	for {
-		select {
-		case id := <-r.resultChan:
-			tdi, exist := r.idToTrace.Load(id)
-			if !exist {
-
-			} else {
-				td := tdi.(*common.TraceData)
-				if td.Id == "c074d0a90cd607b" {
-					r.logger.Info("example",
-						zap.Int("len", td.Sd.Len()),
-					)
-				}
-				i++
-				// {"c074d0a90cd607b":"C0BC243E017EF22CE16E1CA728EB98F5",
-				checkSum := CompactMd5(td)
-				if !start {
-					sb.WriteString(",\"")
-				} else {
-					sb.WriteString("\"")
-					start = false
-				}
-				sb.WriteString(td.Id)
-				sb.WriteString("\":\"")
-				sb.WriteString(checkSum)
-				sb.WriteString("\"")
-				//r.checkSumMap[td.Id] = checkSum
-			}
-		default:
-			r.logger.Info("gen checksum",
-				zap.Int("len", len(r.checkSumMap)),
-				zap.Duration("cost", time.Since(btime)),
-			)
-			goto FINAL
+	calTimes := 0
+	r.idToTrace.Range(func(key, value interface{}) bool {
+		i++
+		td := value.(*common.TraceData)
+		if td.Md5 == "" {
+			calTimes++
+			td.Md5 = CompactMd5(td)
 		}
-	}
+		if !start {
+			sb.WriteString(",\"")
+		} else {
+			sb.WriteString("\"")
+			start = false
+		}
+		sb.WriteString(td.Id)
+		sb.WriteString("\":\"")
+		sb.WriteString(td.Md5)
+		sb.WriteString("\"")
+		return true
+	})
+	r.logger.Info("gen checksum",
+		zap.Int("len", i),
+		zap.Int("calTimes", calTimes),
+		zap.Duration("cost", time.Since(btime)),
+	)
 
-FINAL:
+	//	for {
+	//		select {
+	//		case id := <-r.resultChan:
+	//			tdi, exist := r.idToTrace.Load(id)
+	//			if !exist {
+	//
+	//			} else {
+	//				i++
+	//				td := tdi.(*common.TraceData)
+	//				//if td.Id == "c074d0a90cd607b" {
+	//				//	r.logger.Info("example",
+	//				//		zap.Int("len", td.Sd.Len()),
+	//				//	)
+	//				//}
+	//				// {"c074d0a90cd607b":"C0BC243E017EF22CE16E1CA728EB98F5",
+	//
+	//				if td.Md5 == "" {
+	//					td.Md5 = CompactMd5(td)
+	//				}
+	//				if !start {
+	//					sb.WriteString(",\"")
+	//				} else {
+	//					sb.WriteString("\"")
+	//					start = false
+	//				}
+	//				sb.WriteString(td.Id)
+	//				sb.WriteString("\":\"")
+	//				sb.WriteString(td.Md5)
+	//				sb.WriteString("\"")
+	//				//r.checkSumMap[td.Id] = checkSum
+	//			}
+	//		default:
+	//			r.logger.Info("gen checksum",
+	//				zap.Int("len", i),
+	//				zap.Duration("cost", time.Since(btime)),
+	//			)
+	//			goto FINAL
+	//		}
+	//	}
+	//
+	//FINAL:
 	sb.WriteString("}")
 	btime = time.Now()
 	//r.logger.Info(sb.String())

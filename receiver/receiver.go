@@ -22,6 +22,7 @@ type Receiver struct {
 	idToTrace            sync.Map
 
 	deleteChan chan string
+	finishBool bool
 	finishChan chan interface{}
 	closeTimes int64
 	sync.Mutex
@@ -32,9 +33,11 @@ type Receiver struct {
 	consumer    *ChannelGroupConsume
 	traceNums   int64
 	maxSpanNums int
+	overWg      sync.WaitGroup
 }
 
 func (r *Receiver) Run() {
+	r.finishBool = false
 	var err error
 	r.logger, _ = zap.NewProduction()
 	defer r.logger.Sync()
@@ -100,7 +103,7 @@ func (r *Receiver) Run() {
 
 	// 13*20*2.9 = 754
 	// 300 * 2.9 = 870
-	r.lruCache, err = lru.New(7_0000)
+	r.lruCache, err = lru.New(8_0000)
 	if err != nil {
 		r.logger.Error("lru new fail",
 			zap.Error(err),
@@ -161,6 +164,7 @@ func (r *Receiver) SetParamHandler(c *gin.Context) {
 
 func (r *Receiver) QueryWrongHandler(c *gin.Context) {
 	id := c.DefaultQuery("id", "")
+	over := c.DefaultQuery("over", "0")
 	r.wrongIdMap.Store(id, true)
 	if id == "c074d0a90cd607b" {
 		r.logger.Info("got wrong example notify",
@@ -173,15 +177,11 @@ func (r *Receiver) QueryWrongHandler(c *gin.Context) {
 		// 等待过期即可
 		otd := tdi.(*common.TraceData)
 		otd.Wrong = true
-
-		// 已过期
-		//if len(otd.Sd) == 0 {
-		//r.logger.Info("expire id",
-		//	zap.String("id", id),
-		//	zap.String("port", r.HttpPort),
-		//)
-		//}
-
+		if r.finishBool {
+			r.logger.Info("should exist map ",
+				zap.String("id", id),
+			)
+		}
 	} else {
 		// 查找lru
 		ltdi, lexist := r.lruCache.Get(id)
@@ -192,9 +192,18 @@ func (r *Receiver) QueryWrongHandler(c *gin.Context) {
 			//)
 			//r.lruCache.Remove(id)
 			ltd := ltdi.(*common.TraceData)
-			go func() {
-				SendWrongRequest(ltd, r.CompactorSetWrongUrl)
-			}()
+			if over == "1" {
+				SendWrongRequest(ltd, r.CompactorSetWrongUrl, "", nil)
+				r.logger.Info("query wrong in over",
+					zap.String("id", id),
+				)
+			} else {
+				go func() {
+					SendWrongRequest(ltd, r.CompactorSetWrongUrl, "", nil)
+				}()
+			}
+
+			//r.lruCache.Remove(id)
 		} else {
 			//r.logger.Info(" id not in lru",
 			//	zap.String("id", id),
@@ -236,7 +245,7 @@ func (r *Receiver) ConsumeTraceData(spans common.Spans) {
 				default:
 					dropId, ok := <-r.deleteChan
 					if ok {
-						r.dropTrace(dropId, false)
+						r.dropTrace(dropId, "0")
 					}
 				}
 			}
@@ -244,7 +253,7 @@ func (r *Receiver) ConsumeTraceData(spans common.Spans) {
 	}
 }
 
-func (r *Receiver) dropTrace(id string, keep bool) {
+func (r *Receiver) dropTrace(id string, over string) {
 	atomic.AddInt64(&r.traceNums, 1)
 
 	d, ok := r.idToTrace.Load(id)
@@ -282,7 +291,7 @@ func (r *Receiver) dropTrace(id string, keep bool) {
 
 	if wrong {
 		//r.logger.Info("send wrong id", zap.String("id", id))
-		go SendWrongRequest(td, r.CompactorSetWrongUrl)
+		go SendWrongRequest(td, r.CompactorSetWrongUrl, over, &r.overWg)
 		return
 	}
 }
@@ -294,9 +303,17 @@ func (r *Receiver) finish() {
 	for {
 		select {
 		case id := <-r.deleteChan:
-			r.dropTrace(id, true)
+			r.dropTrace(id, "1")
 		default:
 			r.logger.Info("clear less succ",
+				zap.Duration("cost", time.Since(btime)),
+				zap.Int64("traceNum", r.traceNums),
+				zap.Int("maxSpLen", r.maxSpanNums),
+			)
+			r.finishBool = true
+			btime = time.Now()
+			r.overWg.Wait()
+			r.logger.Info("clear less over",
 				zap.Duration("cost", time.Since(btime)),
 				zap.Int64("traceNum", r.traceNums),
 				zap.Int("maxSpLen", r.maxSpanNums),
