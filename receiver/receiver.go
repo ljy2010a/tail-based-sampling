@@ -1,11 +1,13 @@
 package receiver
 
 import (
+	"encoding/json"
 	"fmt"
 	"github.com/gin-gonic/gin"
 	lru "github.com/hashicorp/golang-lru"
 	"github.com/ljy2010a/tailf-based-sampling/common"
 	"github.com/smallnest/goreq"
+	"github.com/valyala/fasthttp"
 	"go.uber.org/zap"
 	"net/http"
 	"os"
@@ -21,9 +23,10 @@ type Receiver struct {
 	logger        *zap.Logger
 	idToTrace     sync.Map
 
-	deleteChan chan string
-	finishChan chan interface{}
-	closeTimes int64
+	deleteChan  chan string
+	finishChan  chan interface{}
+	closeTimes  int64
+	consumerLen int64
 	sync.Mutex
 
 	wrongIdMap sync.Map
@@ -113,12 +116,14 @@ func (r *Receiver) Run() {
 	r.lineChan = make(chan []byte, 50000)
 	r.deleteChan = make(chan string, 30000)
 	r.finishChan = make(chan interface{})
+	r.consumerLen = 2
+
 	go r.finish()
-	go r.ConsumeTraceByteAsync()
-	go r.ConsumeTraceByteAsync()
+	for i := int64(0); i < r.consumerLen; i++ {
+		go r.ConsumeTraceByteAsync()
+	}
 
 	router := gin.New()
-	//router.Use(gin.Logger())
 	router.Use(gin.Recovery())
 	router.GET("/ready", r.ReadyHandler)
 	router.GET("/setParameter", r.SetParamHandler)
@@ -259,7 +264,7 @@ func (r *Receiver) ConsumeTraceByteAsync() {
 	btime := time.Now()
 	size := 0
 	wrong := 0
-	groupNum := 500
+	groupNum := 5000
 	spanDatas := make([]*common.SpanData, groupNum)
 	i := 0
 	go func() {
@@ -273,6 +278,7 @@ func (r *Receiver) ConsumeTraceByteAsync() {
 		once.Do(func() {
 			btime = time.Now()
 		})
+		size++
 		spanData := common.ParseSpanData(line)
 		if spanData == nil {
 			continue
@@ -299,14 +305,12 @@ func (r *Receiver) ConsumeTraceByteAsync() {
 		zap.Duration("cost", time.Since(btime)),
 	)
 	times := atomic.AddInt64(&r.closeTimes, 1)
-	if times == 2 {
+	if times == r.consumerLen {
 		close(r.finishChan)
 	}
 }
 
 func (r *Receiver) dropTrace(id string, duration time.Time, keep bool) {
-	//r.Lock()
-	//defer r.Unlock()
 	d, ok := r.idToTrace.Load(id)
 	if !ok {
 		r.logger.Error("drop id not exist", zap.String("id", id))
@@ -336,10 +340,13 @@ func (r *Receiver) dropTrace(id string, duration time.Time, keep bool) {
 	}
 
 	if wrong {
+		//r.Lock()
 		// send2compactor no keep
 		//r.logger.Info("send wrong id", zap.String("id", id))
 		swUrl := fmt.Sprintf("http://127.0.0.1:%s/sw", r.CompactorPort)
-		compactorReq.Post(swUrl).SendStruct(td).End()
+		go SendWrongRequest(td, swUrl)
+		//compactorReq.Post(swUrl).SendStruct(td).End()
+		//r.Unlock()
 		//b, _ := json.Marshal(td)
 		//go func(_b []byte) {
 		//	compactorReq.Post(swUrl).SendRawBytes(_b).End()
@@ -374,4 +381,29 @@ func (r *Receiver) notifyFIN() {
 		zap.Errors("err", err),
 	)
 	r.logger.Info("shutdown", zap.String("port", r.HttpPort))
+}
+
+func SendWrongRequest(td *common.TraceData, reqUrl string) {
+
+	b, _ := json.Marshal(td)
+	req := fasthttp.AcquireRequest()
+	defer fasthttp.ReleaseRequest(req)
+
+	req.SetRequestURI(reqUrl)
+	req.Header.SetMethod("POST")
+	req.Header.SetContentType("application/json")
+	req.SetBody(b)
+
+	resp := fasthttp.AcquireResponse()
+	defer fasthttp.ReleaseResponse(resp)
+
+	if err := fasthttp.Do(req, resp); err != nil {
+		fmt.Printf("set wrong fail id[%v] err[%v] \n", td.Id, err)
+		return
+	}
+	if resp.StatusCode() != fasthttp.StatusOK {
+		fmt.Printf("set wrong fail[%v] code[%v]\n", td.Id, resp.StatusCode())
+		return
+	}
+
 }
