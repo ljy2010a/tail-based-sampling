@@ -3,11 +3,9 @@ package compactor
 import (
 	"crypto/md5"
 	"encoding/hex"
-	"encoding/json"
 	"fmt"
 	"github.com/gin-gonic/gin"
 	"github.com/ljy2010a/tailf-based-sampling/common"
-	"github.com/smallnest/goreq"
 	"go.uber.org/zap"
 	"net/http"
 	"sort"
@@ -21,9 +19,10 @@ type Processor struct {
 }
 
 type Compactor struct {
-	HttpPort string // 8003
-	DataPort string // 8081
-	logger   *zap.Logger
+	HttpPort  string // 8003
+	DataPort  string // 8081
+	ReportUrl string
+	logger    *zap.Logger
 
 	finishChan  chan interface{}
 	checkSumMap map[string]string
@@ -52,7 +51,6 @@ func (r *Compactor) Run() {
 			time.Sleep(1 * time.Minute)
 		}
 	}()
-
 	go func() {
 		time.Sleep(30 * time.Second)
 		if r.DataPort != "" {
@@ -76,12 +74,13 @@ func (r *Compactor) Run() {
 			)
 			if resp.StatusCode == 200 {
 				r.DataPort = fmt.Sprintf("%d", port)
+				r.ReportUrl = fmt.Sprintf("http://127.0.0.1:%s/api/finished", r.DataPort)
 				return
 			}
 		}
 	}()
 
-	r.resultChan = make(chan string, 50000)
+	r.resultChan = make(chan string, 10000)
 	r.finishChan = make(chan interface{})
 	r.checkSumMap = make(map[string]string)
 	go r.finish()
@@ -92,7 +91,7 @@ func (r *Compactor) Run() {
 	router.GET("/ready", r.ReadyHandler)
 	router.GET("/setParameter", r.SetParamHandler)
 	router.POST("/sw", r.SetWrongHandler)
-	router.GET("/fn", r.FinishNotifyHandler)
+	router.GET("/fn", r.NotifyFinishHandler)
 	err := router.Run(fmt.Sprintf(":%s", r.HttpPort))
 	if err != nil {
 		r.logger.Info("r.HttpPort fail", zap.Error(err))
@@ -108,6 +107,7 @@ func (r *Compactor) ReadyHandler(c *gin.Context) {
 func (r *Compactor) SetParamHandler(c *gin.Context) {
 	port := c.DefaultQuery("port", "")
 	r.DataPort = port
+	r.ReportUrl = fmt.Sprintf("http://127.0.0.1:%s/api/finished", r.DataPort)
 	r.logger.Info("SetParamHandler",
 		zap.String("port", r.HttpPort),
 		zap.String("set", r.DataPort),
@@ -132,16 +132,17 @@ func (r *Compactor) SetWrongHandler(c *gin.Context) {
 		if td.Source == "8000" {
 			anotherPort = "8001"
 		}
-		dataUrl := fmt.Sprintf("http://127.0.0.1:%s/qw?id=%s", anotherPort, td.Id)
-		resp, err := http.Get(dataUrl)
-		if err != nil {
-			r.logger.Info("get another wrong fail",
-				zap.String("id", td.Id),
-				zap.Error(err),
-			)
-		} else {
-			resp.Body.Close()
-		}
+		reportUrl := fmt.Sprintf("http://127.0.0.1:%s/qw?id=%s", anotherPort, td.Id)
+		NotifyAnotherWrong(reportUrl)
+		//resp, err := http.Get(dataUrl)
+		//if err != nil {
+		//	r.logger.Info("get another wrong fail",
+		//		zap.String("id", td.Id),
+		//		zap.Error(err),
+		//	)
+		//} else {
+		//	resp.Body.Close()
+		//}
 	} else {
 		otd := tdi.(*common.TraceData)
 		otd.Add(td.Sd)
@@ -150,7 +151,7 @@ func (r *Compactor) SetWrongHandler(c *gin.Context) {
 	return
 }
 
-func (r *Compactor) FinishNotifyHandler(c *gin.Context) {
+func (r *Compactor) NotifyFinishHandler(c *gin.Context) {
 	port := c.DefaultQuery("port", "")
 	r.logger.Info("got notify fin ", zap.String("port", port))
 	times := atomic.AddInt64(&r.closeTimes, 1)
@@ -177,7 +178,6 @@ func (r *Compactor) finish() {
 						zap.Int("len", td.Sd.Len()),
 					)
 				}
-				sort.Sort(td.Sd)
 				checkSum := CompactMd5(td)
 				r.checkSumMap[td.Id] = checkSum
 			}
@@ -195,34 +195,35 @@ FINAL:
 	r.logger.Info("example checksum",
 		zap.String("c074d0a90cd607b = C0BC243E017EF22CE16E1CA728EB98F5 ", r.checkSumMap["c074d0a90cd607b"]),
 	)
-	b, _ := json.Marshal(r.checkSumMap)
-	content := "result=" + string(b)
-	_, body, err := goreq.New().Post(fmt.Sprintf("http://127.0.0.1:%s/api/finished", r.DataPort)).SendMapString(content).End()
+	//b, _ := json.Marshal(r.checkSumMap)
+	//content := "result=" + string(b)
+	//_, body, err := goreq.New().Post(r.ReportUrl).SendMapString(content).End()
+	//r.logger.Info("report checksum",
+	//	zap.Int("len", len(r.checkSumMap)),
+	//	zap.Duration("cost", time.Since(btime)),
+	//	zap.String("body", body),
+	//	zap.Errors("err", err),
+	//)
+	ReportCheckSum(r.checkSumMap, r.ReportUrl)
 	r.logger.Info("report checksum",
 		zap.Int("len", len(r.checkSumMap)),
 		zap.Duration("cost", time.Since(btime)),
-		zap.String("body", body),
-		zap.Errors("err", err),
 	)
 	r.logger.Info("shutdown", zap.String("port", r.HttpPort))
 	return
 }
 
 func CompactMd5(td *common.TraceData) string {
-	//sb := strings.Builder{}
+	sort.Sort(td.Sd)
 	h := md5.New()
 	for _, span := range td.Sd {
-		//sb.WriteString(span.Tags)
-		//sb.WriteString("\n")
 		h.Write([]byte(span.Tags))
 		h.Write([]byte("\n"))
 		//if td.Id == "c074d0a90cd607b" {
 		//	fmt.Println(span.Tags)
 		//}
 	}
-	//h.Write([]byte(sb.String()))
 	//if td.Id == "c074d0a90cd607b" {
-	//	fmt.Println(sb.String())
 	//	fmt.Println(strings.ToUpper(hex.EncodeToString(h.Sum(nil))))
 	//}
 	return strings.ToUpper(hex.EncodeToString(h.Sum(nil)))

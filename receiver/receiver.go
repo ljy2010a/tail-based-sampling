@@ -9,6 +9,7 @@ import (
 	"net/http"
 	"os"
 	"sync"
+	"sync/atomic"
 	"time"
 )
 
@@ -28,7 +29,9 @@ type Receiver struct {
 	wrongIdMap sync.Map
 	lruCache   *lru.Cache
 	//consumer   *ChannelConsume
-	consumer *ChannelGroupConsume
+	consumer    *ChannelGroupConsume
+	traceNums   int64
+	maxSpanNums int
 }
 
 func (r *Receiver) Run() {
@@ -131,7 +134,6 @@ func (r *Receiver) ReadyHandler(c *gin.Context) {
 func (r *Receiver) SetParamHandler(c *gin.Context) {
 	port := c.DefaultQuery("port", "")
 	r.DataPort = port
-	r.CompactorSetWrongUrl = fmt.Sprintf("http://127.0.0.1:%s/sw", r.CompactorPort)
 	r.logger.Info("SetParamHandler",
 		zap.String("port", r.HttpPort),
 		zap.String("set", r.DataPort),
@@ -208,9 +210,9 @@ func (r *Receiver) QueryWrongHandler(c *gin.Context) {
 	return
 }
 
-func (r *Receiver) ConsumeTraceData(spans []*common.SpanData) {
+func (r *Receiver) ConsumeTraceData(spans common.Spans) {
 
-	idToSpans := make(map[string][]*common.SpanData)
+	idToSpans := make(map[string]common.Spans)
 	for _, span := range spans {
 		id := span.TraceId
 		idToSpans[id] = append(idToSpans[id], span)
@@ -248,6 +250,8 @@ func (r *Receiver) ConsumeTraceData(spans []*common.SpanData) {
 }
 
 func (r *Receiver) dropTrace(id string, duration time.Time, keep bool) {
+	atomic.AddInt64(&r.traceNums, 1)
+
 	d, ok := r.idToTrace.Load(id)
 	if !ok {
 		r.logger.Error("drop id not exist", zap.String("id", id))
@@ -260,6 +264,10 @@ func (r *Receiver) dropTrace(id string, duration time.Time, keep bool) {
 	//td.Sd = common.Spans{}
 	//}
 
+	spLen := len(td.Sd)
+	if r.maxSpanNums < spLen {
+		r.maxSpanNums = spLen
+	}
 	wrong := td.Wrong
 	if !wrong {
 		for _, span := range td.Sd {
@@ -295,6 +303,8 @@ func (r *Receiver) finish() {
 		default:
 			r.logger.Info("clear less succ",
 				zap.Duration("cost", time.Since(btime)),
+				zap.Int64("traceNum", r.traceNums),
+				zap.Int("maxSpLen", r.maxSpanNums),
 			)
 			r.notifyFIN()
 			return
@@ -303,7 +313,6 @@ func (r *Receiver) finish() {
 }
 
 func (r *Receiver) notifyFIN() {
-	// send fin
 	notifyUrl := fmt.Sprintf("http://127.0.0.1:%s/fn?port=%s", r.CompactorPort, r.HttpPort)
 	body, err := http.Get(notifyUrl)
 	if err != nil {

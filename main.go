@@ -19,8 +19,9 @@ func main() {
 
 	if httpPort == "8000" || httpPort == "8001" {
 		receiver := receiver.Receiver{
-			HttpPort:      httpPort,
-			CompactorPort: "8002",
+			HttpPort:             httpPort,
+			CompactorPort:        "8002",
+			CompactorSetWrongUrl: fmt.Sprintf("http://127.0.0.1:8002/sw"),
 		}
 		receiver.Run()
 	} else if httpPort == "8002" {
