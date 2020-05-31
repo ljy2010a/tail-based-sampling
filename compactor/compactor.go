@@ -29,6 +29,7 @@ type Compactor struct {
 	closeTimes  int64
 	resultChan  chan string
 	idToTrace   sync.Map
+	startTime   time.Time
 }
 
 func (r *Compactor) Run() {
@@ -75,6 +76,7 @@ func (r *Compactor) Run() {
 			if resp.StatusCode == 200 {
 				r.DataPort = fmt.Sprintf("%d", port)
 				r.ReportUrl = fmt.Sprintf("http://127.0.0.1:%s/api/finished", r.DataPort)
+				r.startTime = time.Now()
 				return
 			}
 		}
@@ -108,6 +110,7 @@ func (r *Compactor) SetParamHandler(c *gin.Context) {
 	port := c.DefaultQuery("port", "")
 	r.DataPort = port
 	r.ReportUrl = fmt.Sprintf("http://127.0.0.1:%s/api/finished", r.DataPort)
+	r.startTime = time.Now()
 	r.logger.Info("SetParamHandler",
 		zap.String("port", r.HttpPort),
 		zap.String("set", r.DataPort),
@@ -181,6 +184,12 @@ func (r *Compactor) finish() {
 		sb.WriteString("\":\"")
 		sb.WriteString(td.Md5)
 		sb.WriteString("\"")
+		//if td.Id == "c074d0a90cd607b" {
+		//	r.logger.Info("example checksum",
+		//		zap.String("c074d0a90cd607b = C0BC243E017EF22CE16E1CA728EB98F5 ", td.Md5),
+		//		zap.Int("splen", len(td.Sd)),
+		//	)
+		//}
 		return true
 	})
 	r.logger.Info("gen checksum",
@@ -233,14 +242,12 @@ func (r *Compactor) finish() {
 	sb.WriteString("}")
 	btime = time.Now()
 	//r.logger.Info(sb.String())
-	//r.logger.Info("example checksum",
-	//	zap.String("c074d0a90cd607b = C0BC243E017EF22CE16E1CA728EB98F5 ", r.checkSumMap["c074d0a90cd607b"]),
-	//)
 	//ReportCheckSum(r.checkSumMap, r.ReportUrl)
 	ReportCheckSumString(sb.String(), r.ReportUrl)
 	r.logger.Info("report checksum",
 		zap.Int("len", i),
 		zap.Duration("cost", time.Since(btime)),
+		zap.Duration("total cost", time.Since(r.startTime)),
 	)
 	return
 }

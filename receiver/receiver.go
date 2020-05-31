@@ -110,7 +110,7 @@ func (r *Receiver) Run() {
 		)
 	}
 
-	r.deleteChan = make(chan string, 9000)
+	r.deleteChan = make(chan string, 5000)
 	r.finishChan = make(chan interface{})
 	doneFunc := func() {
 		close(r.finishChan)
@@ -166,11 +166,11 @@ func (r *Receiver) QueryWrongHandler(c *gin.Context) {
 	id := c.DefaultQuery("id", "")
 	over := c.DefaultQuery("over", "0")
 	r.wrongIdMap.Store(id, true)
-	if id == "c074d0a90cd607b" {
-		r.logger.Info("got wrong example notify",
-			zap.String("id", id),
-		)
-	}
+	//if id == "c074d0a90cd607b" {
+	//	r.logger.Info("got wrong example notify",
+	//		zap.String("id", id),
+	//	)
+	//}
 	tdi, exist := r.idToTrace.Load(id)
 	if exist {
 		// 存在,表示缓存还在
@@ -198,12 +198,12 @@ func (r *Receiver) QueryWrongHandler(c *gin.Context) {
 					zap.String("id", id),
 				)
 			} else {
+				r.lruCache.Remove(id)
 				go func() {
 					SendWrongRequest(ltd, r.CompactorSetWrongUrl, "", nil)
 				}()
 			}
 
-			//r.lruCache.Remove(id)
 		} else {
 			//r.logger.Info(" id not in lru",
 			//	zap.String("id", id),
@@ -290,6 +290,7 @@ func (r *Receiver) dropTrace(id string, over string) {
 	}
 
 	if wrong {
+		r.lruCache.Remove(id)
 		//r.logger.Info("send wrong id", zap.String("id", id))
 		go SendWrongRequest(td, r.CompactorSetWrongUrl, over, &r.overWg)
 		return
