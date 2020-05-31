@@ -35,7 +35,7 @@ var (
 
 func ParseSpanData(line []byte) *SpanData {
 	spanData := &SpanData{}
-	lineStr := string(line)
+	lineStr := BytesToString(line)
 	words := strings.Split(lineStr, "|")
 	if len(words) < 3 {
 		return nil

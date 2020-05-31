@@ -36,6 +36,8 @@ github.com/pmezard/go-difflib v1.0.0 h1:4DBwDE0NGyQoBHbLQYPwSUPoCMWR5BEzIk/f1lZb
 github.com/pmezard/go-difflib v1.0.0/go.mod h1:iKH77koFhYxTK1pcRnkKkqfTogsbg7gZNVY4sRDYZ/4=
 github.com/smallnest/goreq v0.0.0-20180727030113-2e3372c80388 h1:SPRLXpErn+DdwY64I1M/zfjIrj/M5z2vHzM8OCZaNxw=
 github.com/smallnest/goreq v0.0.0-20180727030113-2e3372c80388/go.mod h1:MYxakweC8TfNQlHbxJGQZK0yftcM92cfGxpjwTUZK98=
+github.com/smartystreets-prototypes/go-disruptor v0.0.0-20200316140655-c96477fd7a6a h1:mHEYm/fBGwtGwgIW/tlprwUd2syvcue8oosLVuQscic=
+github.com/smartystreets-prototypes/go-disruptor v0.0.0-20200316140655-c96477fd7a6a/go.mod h1:slFCjqF2v0VgmCeB+J4uEy0d7HAgLkgEjVrG0DPO67M=
 github.com/spaolacci/murmur3 v0.0.0-20180118202830-f09979ecbc72/go.mod h1:JwIasOWyU6f++ZhiEuf87xNszmSA2myDM2Kzu9HwQUA=
 github.com/stretchr/objx v0.1.0/go.mod h1:HFkY916IF+rwdDfMAkV7OtwuqBVzrE8GR6GFx+wExME=
 github.com/stretchr/testify v1.3.0/go.mod h1:M5WIy9Dh21IEIfnGCwXGc5bZfKNJtfHm1UVUgZn+9EI=
