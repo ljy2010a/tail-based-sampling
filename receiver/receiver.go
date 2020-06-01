@@ -139,8 +139,8 @@ func (r *Receiver) Run() {
 	//		v.Clear()
 	//		r.spanPool.Put(v)
 	//	}
-	//	td.Clear()
-	//	r.tdPool.Put(td)
+	//	//td.Clear()
+	//	//r.tdPool.Put(td)
 	//})
 	r.lruCache, err = lru.New(5_0000)
 	if err != nil {
@@ -226,6 +226,7 @@ func (r *Receiver) QueryWrongHandler(c *gin.Context) {
 		ltdi, lexist := r.lruCache.Get(id)
 		if lexist {
 			ltd := ltdi.(*common.TraceData)
+			//b, _ := json.Marshal(ltd)
 			if over == "1" {
 				SendWrongRequest(ltd, r.CompactorSetWrongUrl, "", nil)
 				r.logger.Info("query wrong in over",
@@ -237,7 +238,6 @@ func (r *Receiver) QueryWrongHandler(c *gin.Context) {
 					SendWrongRequest(ltd, r.CompactorSetWrongUrl, "", nil)
 				}()
 			}
-
 		}
 	}
 	c.JSON(http.StatusOK, "")
@@ -251,8 +251,13 @@ func (r *Receiver) ConsumeTraceData(spans common.Spans) {
 		id := span.TraceId
 		span.TraceId = ""
 		if etd, ok := idToSpans[id]; !ok {
-			tdi := r.tdPool.Get()
-			td := tdi.(*common.TraceData)
+			//tdi := r.tdPool.Get()
+			//td := tdi.(*common.TraceData)
+
+			td := &common.TraceData{
+				Sd:     []*common.SpanData{},
+				Source: r.HttpPort,
+			}
 			td.Id = id
 			td.Sd = append(td.Sd, span)
 			idToSpans[id] = td
@@ -262,18 +267,13 @@ func (r *Receiver) ConsumeTraceData(spans common.Spans) {
 	}
 
 	for id, etd := range idToSpans {
-		//initialTraceData := &common.TraceData{
-		//	Sd:     spans,
-		//	Id:     id,
-		//	Source: r.HttpPort,
-		//}
 		tdi, exist := r.idToTrace.LoadOrStore(id, etd)
 		if exist {
 			// 已存在
 			td := tdi.(*common.TraceData)
 			td.Add(etd.Sd)
-			etd.Clear()
-			r.tdPool.Put(etd)
+			//etd.Clear()
+			//r.tdPool.Put(etd)
 		} else {
 			postDeletion := false
 			// 淘汰一个
@@ -331,9 +331,13 @@ func (r *Receiver) dropTrace(id string, over string) {
 		}
 	}
 
+	//r.idToTrace.Delete(id)
 	if wrong {
 		r.lruCache.Remove(id)
 		//r.logger.Info("send wrong id", zap.String("id", id))
+		//b, _ := json.Marshal(td)
+		//go SendWrongRequestB(td, r.CompactorSetWrongUrl, b, over, &r.overWg)
+
 		go SendWrongRequest(td, r.CompactorSetWrongUrl, over, &r.overWg)
 		return
 	}
