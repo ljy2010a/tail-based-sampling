@@ -253,7 +253,7 @@ func (r *Compactor) finish() {
 }
 
 func CompactMd5(td *common.TraceData) string {
-	sort.Sort(td.Sd)
+	sort.Sort(common.Spans(td.Sd))
 	h := md5.New()
 	for _, span := range td.Sd {
 		h.Write([]byte(span.Tags))

@@ -33,7 +33,10 @@ type Receiver struct {
 	consumer    *ChannelGroupConsume
 	traceNums   int64
 	maxSpanNums int
+	minSpanNums int
 	overWg      sync.WaitGroup
+	tdPool      *sync.Pool
+	autoDetect  bool
 }
 
 func (r *Receiver) Run() {
@@ -42,6 +45,9 @@ func (r *Receiver) Run() {
 	r.logger, _ = zap.NewProduction()
 	defer r.logger.Sync()
 	go func() {
+		if !r.autoDetect {
+			return
+		}
 		i := 0
 		for {
 			if i > 4 {
@@ -58,6 +64,9 @@ func (r *Receiver) Run() {
 		}
 	}()
 	go func() {
+		if !r.autoDetect {
+			return
+		}
 		time.Sleep(30 * time.Second)
 		if r.DataPort != "" {
 			r.logger.Info("has dataport")
@@ -103,11 +112,21 @@ func (r *Receiver) Run() {
 
 	// 13*20*2.9 = 754
 	// 300 * 2.9 = 870
-	r.lruCache, err = lru.New(8_0000)
+	r.lruCache, err = lru.New(5_0000)
 	if err != nil {
 		r.logger.Error("lru new fail",
 			zap.Error(err),
 		)
+	}
+
+	r.tdPool = &sync.Pool{
+		New: func() interface{} {
+			return &common.TraceData{
+				Sd:     []*common.SpanData{},
+				Id:     "",
+				Source: r.HttpPort,
+			}
+		},
 	}
 
 	r.deleteChan = make(chan string, 5000)
@@ -186,11 +205,6 @@ func (r *Receiver) QueryWrongHandler(c *gin.Context) {
 		// 查找lru
 		ltdi, lexist := r.lruCache.Get(id)
 		if lexist {
-			//r.logger.Info(" id found in lru",
-			//	zap.String("id", id),
-			//	zap.String("port", r.HttpPort),
-			//)
-			//r.lruCache.Remove(id)
 			ltd := ltdi.(*common.TraceData)
 			if over == "1" {
 				SendWrongRequest(ltd, r.CompactorSetWrongUrl, "", nil)
@@ -204,11 +218,6 @@ func (r *Receiver) QueryWrongHandler(c *gin.Context) {
 				}()
 			}
 
-		} else {
-			//r.logger.Info(" id not in lru",
-			//	zap.String("id", id),
-			//	zap.String("port", r.HttpPort),
-			//)
 		}
 	}
 	c.JSON(http.StatusOK, "")
@@ -217,24 +226,37 @@ func (r *Receiver) QueryWrongHandler(c *gin.Context) {
 
 func (r *Receiver) ConsumeTraceData(spans common.Spans) {
 
-	idToSpans := make(map[string]common.Spans)
+	idToSpans := make(map[string]*common.TraceData)
 	for _, span := range spans {
 		id := span.TraceId
-		idToSpans[id] = append(idToSpans[id], span)
 		span.TraceId = ""
+		if etd, ok := idToSpans[id]; !ok {
+			tdi := r.tdPool.Get()
+			td := tdi.(*common.TraceData)
+			td.Id = id
+			td.Sd = append(td.Sd, span)
+			idToSpans[id] = td
+		} else {
+			etd.Sd = append(etd.Sd, span)
+		}
 	}
 
-	for id, spans := range idToSpans {
-		initialTraceData := &common.TraceData{
-			Sd:     spans,
-			Id:     id,
-			Source: r.HttpPort,
-		}
-		d, exist := r.idToTrace.LoadOrStore(id, initialTraceData)
+	for id, etd := range idToSpans {
+		//initialTraceData := &common.TraceData{
+		//	Sd:     spans,
+		//	Id:     id,
+		//	Source: r.HttpPort,
+		//}
+		tdi, exist := r.idToTrace.LoadOrStore(id, etd)
 		if exist {
 			// 已存在
-			td := d.(*common.TraceData)
-			td.Add(spans)
+			td := tdi.(*common.TraceData)
+			td.Add(etd.Sd)
+			etd.Id = ""
+			etd.Sd = etd.Sd[:0]
+			etd.Wrong = false
+			etd.Md5 = ""
+			r.tdPool.Put(etd)
 		} else {
 			postDeletion := false
 			// 淘汰一个
@@ -268,10 +290,13 @@ func (r *Receiver) dropTrace(id string, over string) {
 	//td.Sd = common.Spans{}
 	//}
 
-	spLen := len(td.Sd)
-	if r.maxSpanNums < spLen {
-		r.maxSpanNums = spLen
-	}
+	//spLen := len(td.Sd)
+	//if r.maxSpanNums < spLen {
+	//	r.maxSpanNums = spLen
+	//}
+	//if r.minSpanNums > spLen || r.minSpanNums == 0 {
+	//	r.minSpanNums = spLen
+	//}
 	wrong := td.Wrong
 	if !wrong {
 		for _, span := range td.Sd {
@@ -318,6 +343,7 @@ func (r *Receiver) finish() {
 				zap.Duration("cost", time.Since(btime)),
 				zap.Int64("traceNum", r.traceNums),
 				zap.Int("maxSpLen", r.maxSpanNums),
+				zap.Int("minSpanNums", r.minSpanNums),
 			)
 			r.notifyFIN()
 			return

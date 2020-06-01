@@ -2,7 +2,6 @@ package common
 
 import (
 	"bytes"
-	"compress/gzip"
 	"strings"
 	"sync"
 	"unsafe"
@@ -61,7 +60,7 @@ func ParseSpanData(line []byte) *SpanData {
 }
 
 type TraceData struct {
-	Sd     Spans
+	Sd     []*SpanData
 	Id     string
 	Source string `json:"s"`
 	Md5    string `json:"-"`
@@ -87,38 +86,3 @@ func BytesToString(b []byte) string {
 func StringToBytes(s string) []byte {
 	return *(*[]byte)(unsafe.Pointer(&s))
 }
-
-func GzipEncode(in []byte) ([]byte, error) {
-	var buffer bytes.Buffer
-	writer := gzip.NewWriter(&buffer)
-	_, err := writer.Write(in)
-	if err != nil {
-		writer.Close()
-		return nil, err
-	}
-	err = writer.Close()
-	if err != nil {
-		return nil, err
-	}
-
-	return buffer.Bytes(), nil
-}
-
-//func GzipTd(td *TraceData) ([]byte, error) {
-//	var buffer bytes.Buffer
-//	//writer := gzip.NewWriter(&buffer)
-//	writer, _ := gzip.NewWriterLevel(&buffer, gzip.BestSpeed)
-//	for _, span := range td.Sd {
-//		_, err := writer.Write(span.Tags)
-//		if err != nil {
-//			writer.Close()
-//			return nil, err
-//		}
-//	}
-//	err := writer.Close()
-//	if err != nil {
-//		return nil, err
-//	}
-//
-//	return buffer.Bytes(), nil
-//}

@@ -108,13 +108,13 @@ func (c *ChannelGroupConsume) consume() {
 	wrong := 0
 	spanDatas := make([]*common.SpanData, c.groupNum)
 	i := 0
-	go func() {
-		c.logger.Info("read stat",
-			zap.Int("wrong", wrong),
-			zap.Int("size", size),
-		)
-		time.Sleep(10 * time.Second)
-	}()
+	//go func() {
+	//	c.logger.Info("read stat",
+	//		zap.Int("wrong", wrong),
+	//		zap.Int("size", size),
+	//	)
+	//	time.Sleep(10 * time.Second)
+	//}()
 	once := sync.Once{}
 	for lines := range c.lineChan {
 		once.Do(func() {
