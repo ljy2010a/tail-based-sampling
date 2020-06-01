@@ -9,7 +9,6 @@ import (
 	"go.uber.org/zap"
 	"net/http"
 	"os"
-	"strings"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -399,14 +398,17 @@ func (r *Receiver) ParseSpanData(line []byte) *common.SpanData {
 	//spanDatai := r.spanPool.Get()
 	//spanData := spanDatai.(*common.SpanData)
 
-	spanData := &common.SpanData{}
-	lineStr := common.BytesToString(line)
-	words := strings.Split(lineStr, "|")
-	if len(words) < 3 {
+	if len(line) < 60 {
 		return nil
 	}
-	spanData.TraceId = words[0]
-	spanData.StartTime = words[1]
+	spanData := &common.SpanData{}
+	lineStr := common.BytesToString(line)
+	//words := strings.Split(lineStr, "|")
+	//if len(words) < 3 {
+	//	return nil
+	//}
+	//spanData.TraceId = words[0]
+	//spanData.StartTime = words[1]
 
 	//st, err := strconv.ParseInt(words[1], 10, 64)
 	//if err != nil {
@@ -414,9 +416,10 @@ func (r *Receiver) ParseSpanData(line []byte) *common.SpanData {
 	//	return nil
 	//}
 
-	//firstIdx := bytes.Index(line, S1)
-	//spanData.TraceId = line[:firstIdx]
-	//secondIdx := bytes.Index(line[firstIdx:],S1)
+	firstIdx := bytes.Index(line, S1)
+	spanData.TraceId = common.BytesToString(line[:firstIdx])
+	secondIdx := bytes.Index(line[firstIdx+1:], S1)
+	spanData.StartTime = common.BytesToString(line[firstIdx+1 : firstIdx+1+secondIdx])
 	spanData.Tags = lineStr
 	if bytes.Contains(line, Ferr1) {
 		spanData.Wrong = true

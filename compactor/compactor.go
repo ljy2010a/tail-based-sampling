@@ -256,7 +256,7 @@ func CompactMd5(td *common.TraceData) string {
 	sort.Sort(common.Spans(td.Sd))
 	h := md5.New()
 	for _, span := range td.Sd {
-		h.Write([]byte(span.Tags))
+		h.Write(common.StringToBytes(span.Tags))
 		h.Write([]byte("\n"))
 		//if td.Id == "c074d0a90cd607b" {
 		//	fmt.Println(span.Tags)
