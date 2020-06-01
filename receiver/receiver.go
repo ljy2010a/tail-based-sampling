@@ -39,7 +39,7 @@ type Receiver struct {
 	overWg      sync.WaitGroup
 	tdPool      *sync.Pool
 	spanPool    *sync.Pool
-	autoDetect  bool
+	AutoDetect  bool
 }
 
 func (r *Receiver) Run() {
@@ -48,9 +48,6 @@ func (r *Receiver) Run() {
 	r.logger, _ = zap.NewProduction()
 	defer r.logger.Sync()
 	go func() {
-		if !r.autoDetect {
-			return
-		}
 		i := 0
 		for {
 			if i > 4 {
@@ -67,7 +64,7 @@ func (r *Receiver) Run() {
 		}
 	}()
 	go func() {
-		if !r.autoDetect {
+		if !r.AutoDetect {
 			return
 		}
 		time.Sleep(30 * time.Second)
@@ -136,15 +133,16 @@ func (r *Receiver) Run() {
 
 	// 13*20*2.9 = 754
 	// 300 * 2.9 = 870
-	r.lruCache, err = lru.NewWithEvict(5_0000, func(key interface{}, value interface{}) {
-		td := value.(*common.TraceData)
-		for _, v := range td.Sd {
-			v.Clear()
-			r.spanPool.Put(v)
-		}
-		td.Clear()
-		r.tdPool.Put(td)
-	})
+	//r.lruCache, err = lru.NewWithEvict(5_0000, func(key interface{}, value interface{}) {
+	//	td := value.(*common.TraceData)
+	//	for _, v := range td.Sd {
+	//		v.Clear()
+	//		r.spanPool.Put(v)
+	//	}
+	//	td.Clear()
+	//	r.tdPool.Put(td)
+	//})
+	r.lruCache, err = lru.New(5_0000)
 	if err != nil {
 		r.logger.Error("lru new fail",
 			zap.Error(err),
@@ -304,7 +302,7 @@ func (r *Receiver) dropTrace(id string, over string) {
 	}
 	td := d.(*common.TraceData)
 	//if !keep {
-	//r.lruCache.Add(id, td)
+	r.lruCache.Add(id, td)
 	r.idToTrace.Delete(id)
 	//td.Sd = common.Spans{}
 	//}
@@ -334,12 +332,12 @@ func (r *Receiver) dropTrace(id string, over string) {
 	}
 
 	if wrong {
-		//r.lruCache.Remove(id)
+		r.lruCache.Remove(id)
 		//r.logger.Info("send wrong id", zap.String("id", id))
 		go SendWrongRequest(td, r.CompactorSetWrongUrl, over, &r.overWg)
 		return
 	}
-	r.lruCache.Add(id, td)
+	//r.lruCache.Add(id, td)
 }
 
 func (r *Receiver) finish() {
@@ -394,10 +392,10 @@ var (
 )
 
 func (r *Receiver) ParseSpanData(line []byte) *common.SpanData {
-	spanDatai := r.spanPool.Get()
-	spanData := spanDatai.(*common.SpanData)
+	//spanDatai := r.spanPool.Get()
+	//spanData := spanDatai.(*common.SpanData)
 
-	//spanData := &common.SpanData{}
+	spanData := &common.SpanData{}
 	lineStr := common.BytesToString(line)
 	words := strings.Split(lineStr, "|")
 	if len(words) < 3 {
