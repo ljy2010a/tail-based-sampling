@@ -1,6 +1,7 @@
 package receiver
 
 import (
+	"bytes"
 	"fmt"
 	"github.com/gin-gonic/gin"
 	lru "github.com/hashicorp/golang-lru"
@@ -8,6 +9,7 @@ import (
 	"go.uber.org/zap"
 	"net/http"
 	"os"
+	"strings"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -36,6 +38,7 @@ type Receiver struct {
 	minSpanNums int
 	overWg      sync.WaitGroup
 	tdPool      *sync.Pool
+	spanPool    *sync.Pool
 	autoDetect  bool
 }
 
@@ -108,17 +111,6 @@ func (r *Receiver) Run() {
 		}
 	}()
 
-	// 10000条 = 2.9MB
-
-	// 13*20*2.9 = 754
-	// 300 * 2.9 = 870
-	r.lruCache, err = lru.New(5_0000)
-	if err != nil {
-		r.logger.Error("lru new fail",
-			zap.Error(err),
-		)
-	}
-
 	r.tdPool = &sync.Pool{
 		New: func() interface{} {
 			return &common.TraceData{
@@ -127,6 +119,36 @@ func (r *Receiver) Run() {
 				Source: r.HttpPort,
 			}
 		},
+	}
+
+	r.spanPool = &sync.Pool{
+		New: func() interface{} {
+			return &common.SpanData{
+				TraceId:   "",
+				StartTime: "",
+				Tags:      "",
+				Wrong:     false,
+			}
+		},
+	}
+
+	// 10000条 = 2.9MB
+
+	// 13*20*2.9 = 754
+	// 300 * 2.9 = 870
+	r.lruCache, err = lru.NewWithEvict(5_0000, func(key interface{}, value interface{}) {
+		td := value.(*common.TraceData)
+		for _, v := range td.Sd {
+			v.Clear()
+			r.spanPool.Put(v)
+		}
+		td.Clear()
+		r.tdPool.Put(td)
+	})
+	if err != nil {
+		r.logger.Error("lru new fail",
+			zap.Error(err),
+		)
 	}
 
 	r.deleteChan = make(chan string, 5000)
@@ -252,10 +274,7 @@ func (r *Receiver) ConsumeTraceData(spans common.Spans) {
 			// 已存在
 			td := tdi.(*common.TraceData)
 			td.Add(etd.Sd)
-			etd.Id = ""
-			etd.Sd = etd.Sd[:0]
-			etd.Wrong = false
-			etd.Md5 = ""
+			etd.Clear()
 			r.tdPool.Put(etd)
 		} else {
 			postDeletion := false
@@ -285,7 +304,7 @@ func (r *Receiver) dropTrace(id string, over string) {
 	}
 	td := d.(*common.TraceData)
 	//if !keep {
-	r.lruCache.Add(id, td)
+	//r.lruCache.Add(id, td)
 	r.idToTrace.Delete(id)
 	//td.Sd = common.Spans{}
 	//}
@@ -315,11 +334,12 @@ func (r *Receiver) dropTrace(id string, over string) {
 	}
 
 	if wrong {
-		r.lruCache.Remove(id)
+		//r.lruCache.Remove(id)
 		//r.logger.Info("send wrong id", zap.String("id", id))
 		go SendWrongRequest(td, r.CompactorSetWrongUrl, over, &r.overWg)
 		return
 	}
+	r.lruCache.Add(id, td)
 }
 
 func (r *Receiver) finish() {
@@ -364,4 +384,44 @@ func (r *Receiver) notifyFIN() {
 		)
 	}
 
+}
+
+var (
+	FCode    = []byte("http.status_code=")
+	FCode200 = []byte("http.status_code=200")
+	Ferr1    = []byte("error=1")
+	S1       = []byte("|")
+)
+
+func (r *Receiver) ParseSpanData(line []byte) *common.SpanData {
+	spanDatai := r.spanPool.Get()
+	spanData := spanDatai.(*common.SpanData)
+
+	//spanData := &common.SpanData{}
+	lineStr := common.BytesToString(line)
+	words := strings.Split(lineStr, "|")
+	if len(words) < 3 {
+		return nil
+	}
+	spanData.TraceId = words[0]
+	spanData.StartTime = words[1]
+
+	//st, err := strconv.ParseInt(words[1], 10, 64)
+	//if err != nil {
+	//	fmt.Printf("timestamp to int64 fail %v \n", words[1])
+	//	return nil
+	//}
+
+	//firstIdx := bytes.Index(line, S1)
+	//spanData.TraceId = line[:firstIdx]
+	//secondIdx := bytes.Index(line[firstIdx:],S1)
+	spanData.Tags = lineStr
+	if bytes.Contains(line, Ferr1) {
+		spanData.Wrong = true
+		return spanData
+	}
+	if bytes.Contains(line, FCode) && !bytes.Contains(line, FCode200) {
+		spanData.Wrong = true
+	}
+	return spanData
 }

@@ -16,3 +16,4 @@
 /.idea
 /main
 /receiver/cpu.profile
+.DS_Store

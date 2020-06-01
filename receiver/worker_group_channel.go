@@ -122,7 +122,7 @@ func (c *ChannelGroupConsume) consume() {
 		})
 		for _, line := range lines {
 			size++
-			spanData := common.ParseSpanData(line)
+			spanData := c.receiver.ParseSpanData(line)
 			if spanData == nil {
 				continue
 			}

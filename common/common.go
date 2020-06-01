@@ -23,6 +23,13 @@ type SpanData struct {
 	Wrong     bool   `json:"-"`
 }
 
+func (s *SpanData) Clear() {
+	s.TraceId = ""
+	s.StartTime = ""
+	s.Tags = ""
+	s.Wrong = false
+}
+
 var (
 	FCode    = []byte("http.status_code=")
 	FCode200 = []byte("http.status_code=200")
@@ -59,15 +66,6 @@ func ParseSpanData(line []byte) *SpanData {
 	return spanData
 }
 
-type TraceData struct {
-	Sd     []*SpanData
-	Id     string
-	Source string `json:"s"`
-	Md5    string `json:"-"`
-	Wrong  bool   `json:"-"`
-	sync.Mutex
-}
-
 type Spans []*SpanData
 
 func (s Spans) Len() int           { return len(s) }
@@ -85,4 +83,20 @@ func BytesToString(b []byte) string {
 }
 func StringToBytes(s string) []byte {
 	return *(*[]byte)(unsafe.Pointer(&s))
+}
+
+type TraceData struct {
+	Sd     []*SpanData
+	Id     string
+	Source string `json:"s"`
+	Md5    string `json:"-"`
+	Wrong  bool   `json:"-"`
+	sync.Mutex
+}
+
+func (t *TraceData) Clear() {
+	t.Sd = t.Sd[:0]
+	t.Id = ""
+	t.Md5 = ""
+	t.Wrong = false
 }
