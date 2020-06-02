@@ -85,7 +85,7 @@ func (c *ChannelGroupConsume) Read(rd io.Reader) {
 	rtime := time.Since(btime)
 	ctime := time.Now()
 	close(c.lineChan)
-	c.receiver.lruCache.Resize(20_0000)
+	c.receiver.lruCache.Resize(15_0000)
 	c.doneWg.Wait()
 	c.logger.Info("consumer all done",
 		zap.Duration("read cost", rtime),

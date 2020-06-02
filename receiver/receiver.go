@@ -287,11 +287,15 @@ func (r *Receiver) ConsumeTraceData(spans common.Spans) {
 			td := tdi.(*common.TraceData)
 			td.Add(etd.Sd)
 			//if !td.Wrong && etd.Wrong {
+			//	// noti
 			//	td.Wrong = true
 			//}
 			//etd.Clear()
 			//r.tdPool.Put(etd)
 		} else {
+			//if etd.Wrong {
+			//	// noti
+			//}
 			// 淘汰一个
 			postDeletion := false
 			for !postDeletion {
@@ -350,10 +354,16 @@ func (r *Receiver) dropTrace(id string, over string) {
 		//r.logger.Info("send wrong id", zap.String("id", id))
 		//b, _ := td.Marshal()
 		//go SendWrongRequestB(td, r.CompactorSetWrongUrl, b, over, &r.overWg)
+		//td.Status = 1
 		go SendWrongRequest(td, r.CompactorSetWrongUrl, over, &r.overWg)
 		return
 	}
 	r.lruCache.Add(id, td)
+
+	//if over != "1" {
+	//	r.idToTrace.Delete(id)
+	//	r.lruCache.Add(id, td)
+	//}
 }
 
 func (r *Receiver) finish() {
