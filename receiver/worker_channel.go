@@ -98,7 +98,7 @@ func (c *ChannelConsume) consume() {
 			btime = time.Now()
 		})
 		size++
-		spanData := common.ParseSpanData(line)
+		spanData := c.receiver.ParseSpanData(line)
 		if spanData == nil {
 			continue
 		}

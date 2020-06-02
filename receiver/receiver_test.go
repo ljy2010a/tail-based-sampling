@@ -43,7 +43,7 @@ func Benchmark_ConsumeTraceData(b *testing.B) {
 				span := &common.SpanData{
 					TraceId:   id,
 					StartTime: startTime,
-					Tags:      "1d37a8b17db8568b|1589285985482007|3d1e7e1147c1895d|1d37a8b17db8568b|1259|InventoryCenter|/api/traces|192.168.0.2|http.status_code=200&http.url=http://tracing.console.aliyun.com/getOrder&component=java-web-servlet&span.kind=server&http.method=GET",
+					Tags:      []byte("1d37a8b17db8568b|1589285985482007|3d1e7e1147c1895d|1d37a8b17db8568b|1259|InventoryCenter|/api/traces|192.168.0.2|http.status_code=200&http.url=http://tracing.console.aliyun.com/getOrder&component=java-web-servlet&span.kind=server&http.method=GET"),
 					Wrong:     false,
 				}
 				//spani := rr.spanPool.Get()

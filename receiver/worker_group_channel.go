@@ -14,6 +14,7 @@ type ChannelGroupConsume struct {
 	logger       *zap.Logger
 	lineChan     chan [][]byte
 	lineGroupNum int
+	readBufSize  int
 	doneFunc     func()
 	doneOnce     sync.Once
 	doneWg       sync.WaitGroup
@@ -24,12 +25,14 @@ type ChannelGroupConsume struct {
 func NewChannelGroupConsume(receiver *Receiver, f func()) *ChannelGroupConsume {
 	// 300w = 10.67s , 13.15s
 	// 350w = 9.76s , 12.73s
+	// 500w = 1450MB , 6.98s , 9.52s
 	return &ChannelGroupConsume{
 		receiver:     receiver,
 		logger:       receiver.logger,
-		lineChan:     make(chan [][]byte, 7000),
+		lineChan:     make(chan [][]byte, 10000),
 		lineGroupNum: 500,
 		groupNum:     5000,
+		readBufSize:  1024 * 8,
 		workNum:      2,
 		doneFunc:     f,
 	}
@@ -44,7 +47,7 @@ func (c *ChannelGroupConsume) Read(rd io.Reader) {
 	//	}
 	//}()
 	btime := time.Now()
-	br := bufio.NewReaderSize(rd, 8192)
+	br := bufio.NewReaderSize(rd, c.readBufSize)
 	size := 0
 	total := 0
 	//go func() {
@@ -84,11 +87,12 @@ func (c *ChannelGroupConsume) Read(rd io.Reader) {
 		zap.Int("sourceSize", size),
 		zap.Duration("cost", time.Since(btime)),
 	)
-	btime = time.Now()
+	ctime := time.Now()
 	close(c.lineChan)
 	c.doneWg.Wait()
 	c.logger.Info("consumer all done",
-		zap.Duration("cost", time.Since(btime)),
+		zap.Duration("cost", time.Since(ctime)),
+		zap.Duration("total cost", time.Since(btime)),
 	)
 	c.doneFunc()
 }

@@ -92,9 +92,6 @@ func (r *Receiver) Run() {
 
 				dataUrl := fmt.Sprintf("http://127.0.0.1:%s/trace1.data", r.DataPort)
 				go r.ReadHttp(dataUrl)
-
-				//dataUrl2 := fmt.Sprintf("http://127.0.0.1:%s/trace2.data", r.DataPort)
-				//go r.ReadHttp(dataUrl2)
 				return
 			}
 
@@ -107,6 +104,25 @@ func (r *Receiver) Run() {
 		}
 	}()
 
+	//go func() {
+	//	for {
+	//		time.Sleep(2 * time.Second)
+	//		b2Mb := func(b uint64) uint64 {
+	//			return b / 1024 / 1024
+	//		}
+	//		var m runtime.MemStats
+	//		runtime.ReadMemStats(&m)
+	//
+	//		r.logger.Info("MEM STAT",
+	//			zap.Uint64("Alloc", b2Mb(m.Alloc)),
+	//			zap.Uint64("TotalAlloc", b2Mb(m.TotalAlloc)),
+	//			zap.Uint64("HeapInuse", b2Mb(m.HeapInuse)),
+	//			zap.Uint64("HeapAlloc", b2Mb(m.HeapAlloc)),
+	//			zap.Uint64("Sys", b2Mb(m.Sys)),
+	//			zap.Uint32("NumGC", m.NumGC),
+	//		)
+	//	}
+	//}()
 	r.tdPool = &sync.Pool{
 		New: func() interface{} {
 			return &common.TraceData{
@@ -122,16 +138,14 @@ func (r *Receiver) Run() {
 			return &common.SpanData{
 				TraceId:   "",
 				StartTime: "",
-				Tags:      "",
+				Tags:      []byte{},
 				Wrong:     false,
 			}
 		},
 	}
 
 	// 10000条 = 2.9MB
-
-	// 13*20*2.9 = 754
-	// 300 * 2.9 = 870
+	// 6.5 * 20 * 2.9 = 377
 	//r.lruCache, err = lru.NewWithEvict(5_0000, func(key interface{}, value interface{}) {
 	//	td := value.(*common.TraceData)
 	//	for _, v := range td.Sd {
@@ -303,7 +317,6 @@ func (r *Receiver) dropTrace(id string, over string) {
 	//if !keep {
 	r.lruCache.Add(id, td)
 	r.idToTrace.Delete(id)
-	//td.Sd = common.Spans{}
 	//}
 
 	//spLen := len(td.Sd)
@@ -332,7 +345,7 @@ func (r *Receiver) dropTrace(id string, over string) {
 
 	//r.idToTrace.Delete(id)
 	if wrong {
-		r.lruCache.Remove(id)
+		//r.lruCache.Remove(id)
 		//r.logger.Info("send wrong id", zap.String("id", id))
 		//b, _ := json.Marshal(td)
 		//go SendWrongRequestB(td, r.CompactorSetWrongUrl, b, over, &r.overWg)
@@ -344,32 +357,44 @@ func (r *Receiver) dropTrace(id string, over string) {
 }
 
 func (r *Receiver) finish() {
-	<-r.finishChan
 	btime := time.Now()
+	fwg := sync.WaitGroup{}
+	fonce := sync.Once{}
 	r.logger.Info("start clear less")
-	for {
-		select {
-		case id := <-r.deleteChan:
-			r.dropTrace(id, "1")
-		default:
-			r.logger.Info("clear less succ",
-				zap.Duration("cost", time.Since(btime)),
-				zap.Int64("traceNum", r.traceNums),
-				zap.Int("maxSpLen", r.maxSpanNums),
-			)
-			r.finishBool = true
-			btime = time.Now()
-			r.overWg.Wait()
-			r.logger.Info("clear less over",
-				zap.Duration("cost", time.Since(btime)),
-				zap.Int64("traceNum", r.traceNums),
-				zap.Int("maxSpLen", r.maxSpanNums),
-				zap.Int("minSpanNums", r.minSpanNums),
-			)
-			r.notifyFIN()
-			return
-		}
+	for i := 0; i < 2; i++ {
+		fwg.Add(1)
+		go func() {
+			defer fwg.Done()
+			<-r.finishChan
+			for {
+				fonce.Do(func() {
+					btime = time.Now()
+				})
+				select {
+				case id := <-r.deleteChan:
+					r.dropTrace(id, "1")
+				default:
+					r.logger.Info("clear less succ",
+						zap.Duration("cost", time.Since(btime)),
+						zap.Int64("traceNum", r.traceNums),
+						zap.Int("maxSpLen", r.maxSpanNums),
+					)
+					return
+				}
+			}
+
+		}()
 	}
+	fwg.Wait()
+	r.finishBool = true
+	r.overWg.Wait()
+	r.logger.Info("clear less over",
+		zap.Duration("cost", time.Since(btime)),
+		zap.Int64("traceNum", r.traceNums),
+		zap.Int("maxSpLen", r.maxSpanNums),
+		zap.Int("minSpanNums", r.minSpanNums),
+	)
+	r.notifyFIN()
 }
 
 func (r *Receiver) notifyFIN() {
@@ -402,25 +427,14 @@ func (r *Receiver) ParseSpanData(line []byte) *common.SpanData {
 		return nil
 	}
 	spanData := &common.SpanData{}
-	lineStr := common.BytesToString(line)
-	//words := strings.Split(lineStr, "|")
-	//if len(words) < 3 {
-	//	return nil
-	//}
-	//spanData.TraceId = words[0]
-	//spanData.StartTime = words[1]
-
-	//st, err := strconv.ParseInt(words[1], 10, 64)
-	//if err != nil {
-	//	fmt.Printf("timestamp to int64 fail %v \n", words[1])
-	//	return nil
-	//}
-
 	firstIdx := bytes.Index(line, S1)
 	spanData.TraceId = common.BytesToString(line[:firstIdx])
+
 	secondIdx := bytes.Index(line[firstIdx+1:], S1)
 	spanData.StartTime = common.BytesToString(line[firstIdx+1 : firstIdx+1+secondIdx])
-	spanData.Tags = lineStr
+
+	spanData.Tags = line
+
 	if bytes.Contains(line, Ferr1) {
 		spanData.Wrong = true
 		return spanData

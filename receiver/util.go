@@ -1,7 +1,6 @@
 package receiver
 
 import (
-	"encoding/json"
 	"fmt"
 	"github.com/ljy2010a/tailf-based-sampling/common"
 	"github.com/valyala/fasthttp"
@@ -45,7 +44,7 @@ func SendWrongRequest(td *common.TraceData, reqUrl string, over string, wg *sync
 		defer wg.Done()
 	}
 
-	b, _ := json.Marshal(td)
+	b, _ := td.Marshal()
 	req := fasthttp.AcquireRequest()
 	defer fasthttp.ReleaseRequest(req)
 

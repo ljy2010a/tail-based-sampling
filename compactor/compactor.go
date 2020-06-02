@@ -15,9 +15,6 @@ import (
 	"time"
 )
 
-type Processor struct {
-}
-
 type Compactor struct {
 	HttpPort  string // 8003
 	DataPort  string // 8081
@@ -122,8 +119,22 @@ func (r *Compactor) SetParamHandler(c *gin.Context) {
 func (r *Compactor) SetWrongHandler(c *gin.Context) {
 	over := c.DefaultQuery("over", "0")
 	td := &common.TraceData{}
-	err := c.BindJSON(&td)
+	//err := c.BindJSON(&td)
+	//if err != nil {
+	//	c.AbortWithStatus(http.StatusBadRequest)
+	//	return
+	//}
+
+	body, err := c.GetRawData()
 	if err != nil {
+		r.logger.Info("td get body fail", zap.Error(err))
+		c.AbortWithStatus(http.StatusBadRequest)
+		return
+	}
+	c.Request.Body.Close()
+	err = td.Unmarshal(body)
+	if err != nil {
+		r.logger.Info("td Unmarshal fail", zap.Error(err))
 		c.AbortWithStatus(http.StatusBadRequest)
 		return
 	}
@@ -140,8 +151,13 @@ func (r *Compactor) SetWrongHandler(c *gin.Context) {
 		NotifyAnotherWrong(reportUrl)
 	} else {
 		otd := tdi.(*common.TraceData)
+		if otd.Md5 != "" {
+			r.logger.Info("md5 already exist ", zap.String("id", otd.Id))
+		}
+		if otd.Source == td.Source {
+			r.logger.Info("source already exist ", zap.String("id", otd.Id))
+		}
 		otd.Add(td.Sd)
-		// check sum
 		otd.Md5 = CompactMd5(otd)
 	}
 	c.AbortWithStatus(http.StatusOK)
@@ -256,7 +272,7 @@ func CompactMd5(td *common.TraceData) string {
 	sort.Sort(common.Spans(td.Sd))
 	h := md5.New()
 	for _, span := range td.Sd {
-		h.Write(common.StringToBytes(span.Tags))
+		h.Write(span.Tags)
 		h.Write([]byte("\n"))
 		//if td.Id == "c074d0a90cd607b" {
 		//	fmt.Println(span.Tags)

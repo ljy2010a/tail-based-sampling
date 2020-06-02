@@ -1,0 +1,29 @@
+syntax = "proto3";
+
+package common;
+
+//go get github.com/gogo/protobuf/proto
+//go get github.com/gogo/protobuf/gogoproto
+//go get github.com/gogo/protobuf/protoc-gen-gogofaster
+
+//export GOPATH=$HOME/go
+//export GOBIN=$GOPATH/bin
+//export PATH=$PATH:$GOPATH:$GOBIN
+
+// protoc --gofast_out=. trace.proto
+// protoc -I=. -I=$GOPATH/src -I=$GOPATH/src/github.com/gogo/protobuf/protobuf --gogofaster_out=. trace.proto
+message TraceData {
+    string Id = 1;
+    string Source = 2;
+    string Md5 = 3;
+    bool Wrong = 4;
+    repeated SpanData Sd = 5;
+}
+
+message SpanData {
+    string TraceId = 1;
+    string StartTime = 2;
+    bytes Tags = 3;
+    bool Wrong = 4;
+}
+
