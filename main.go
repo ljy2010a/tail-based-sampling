@@ -6,11 +6,17 @@ import (
 	"github.com/ljy2010a/tailf-based-sampling/compactor"
 	"github.com/ljy2010a/tailf-based-sampling/receiver"
 	"math/rand"
+	"runtime"
 	"time"
 )
 
 func main() {
-	fmt.Println(VERSION, time.Now().Format("2006-01-02 15:04:05"), time.Now().Unix())
+	fmt.Println(
+		VERSION,
+		time.Now().Format("2006-01-02 15:04:05"),
+		time.Now().Unix(),
+		runtime.NumCPU(),
+	)
 
 	rand.Seed(time.Now().Unix())
 	var httpPort string

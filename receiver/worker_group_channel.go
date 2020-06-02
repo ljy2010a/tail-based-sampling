@@ -33,7 +33,7 @@ func NewChannelGroupConsume(receiver *Receiver, readDone func(), over func()) *C
 		lineChan:     make(chan [][]byte, 10000),
 		lineGroupNum: 500,
 		groupNum:     5000,
-		readBufSize:  8 * 1024,
+		readBufSize:  16 * 1024,
 		workNum:      2,
 		readDoneFunc: readDone,
 		overFunc:     over,
