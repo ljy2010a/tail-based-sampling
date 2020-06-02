@@ -15,14 +15,15 @@ type ChannelGroupConsume struct {
 	lineChan     chan [][]byte
 	lineGroupNum int
 	readBufSize  int
-	doneFunc     func()
+	readDoneFunc func()
+	overFunc     func()
 	doneOnce     sync.Once
 	doneWg       sync.WaitGroup
 	groupNum     int
 	workNum      int
 }
 
-func NewChannelGroupConsume(receiver *Receiver, f func()) *ChannelGroupConsume {
+func NewChannelGroupConsume(receiver *Receiver, readDone func(), over func()) *ChannelGroupConsume {
 	// 300w = 10.67s , 13.15s
 	// 350w = 9.76s , 12.73s
 	// 500w = 1450MB , 6.98s , 9.52s  7.33 , 9.21
@@ -32,9 +33,10 @@ func NewChannelGroupConsume(receiver *Receiver, f func()) *ChannelGroupConsume {
 		lineChan:     make(chan [][]byte, 10000),
 		lineGroupNum: 500,
 		groupNum:     5000,
-		readBufSize:  1024 * 8,
+		readBufSize:  32 * 1024,
 		workNum:      2,
-		doneFunc:     f,
+		readDoneFunc: readDone,
+		overFunc:     over,
 	}
 }
 
@@ -84,8 +86,8 @@ func (c *ChannelGroupConsume) Read(rd io.Reader) {
 	}
 	rtime := time.Since(btime)
 	ctime := time.Now()
+	c.readDoneFunc()
 	close(c.lineChan)
-	c.receiver.lruCache.Resize(15_0000)
 	c.doneWg.Wait()
 	c.logger.Info("consumer all done",
 		zap.Duration("read cost", rtime),
@@ -94,7 +96,7 @@ func (c *ChannelGroupConsume) Read(rd io.Reader) {
 		zap.Int("total", total),
 		zap.Int("sourceSize", size),
 	)
-	c.doneFunc()
+	c.overFunc()
 }
 
 func (c *ChannelGroupConsume) StartConsume() {

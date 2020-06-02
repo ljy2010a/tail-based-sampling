@@ -159,10 +159,13 @@ func (r *Receiver) Run() {
 	r.deleteChan = make(chan string, 3000)
 	r.finishChan = make(chan interface{})
 	doneFunc := func() {
+		r.lruCache.Resize(15_0000)
+	}
+	overFunc := func() {
 		close(r.finishChan)
 	}
-	//r.consumer = NewChannelConsume(r, doneFunc)
-	r.consumer = NewChannelGroupConsume(r, doneFunc)
+	//r.consumer = NewChannelConsume(r, overFunc)
+	r.consumer = NewChannelGroupConsume(r, doneFunc, overFunc)
 	r.consumer.StartConsume()
 
 	go r.finish()
