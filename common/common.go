@@ -7,9 +7,9 @@ func (m *TraceData) Clear() {
 	m.Wrong = false
 }
 
-func (m *TraceData) Add(newTD []*SpanData) {
+func (m *TraceData) Add(newTd []*SpanData) {
 	m.Lock()
-	m.Sd = append(m.Sd, newTD...)
+	m.Sd = append(m.Sd, newTd...)
 	m.Unlock()
 }
 

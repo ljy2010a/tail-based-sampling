@@ -153,9 +153,13 @@ func (r *Compactor) SetWrongHandler(c *gin.Context) {
 		otd := tdi.(*common.TraceData)
 		if otd.Md5 != "" {
 			r.logger.Info("md5 already exist ", zap.String("id", otd.Id))
+			c.AbortWithStatus(http.StatusOK)
+			return
 		}
 		if otd.Source == td.Source {
 			r.logger.Info("source already exist ", zap.String("id", otd.Id))
+			c.AbortWithStatus(http.StatusOK)
+			return
 		}
 		otd.Add(td.Sd)
 		otd.Md5 = CompactMd5(otd)
@@ -214,47 +218,6 @@ func (r *Compactor) finish() {
 		zap.Duration("cost", time.Since(btime)),
 	)
 
-	//	for {
-	//		select {
-	//		case id := <-r.resultChan:
-	//			tdi, exist := r.idToTrace.Load(id)
-	//			if !exist {
-	//
-	//			} else {
-	//				i++
-	//				td := tdi.(*common.TraceData)
-	//				//if td.Id == "c074d0a90cd607b" {
-	//				//	r.logger.Info("example",
-	//				//		zap.Int("len", td.Sd.Len()),
-	//				//	)
-	//				//}
-	//				// {"c074d0a90cd607b":"C0BC243E017EF22CE16E1CA728EB98F5",
-	//
-	//				if td.Md5 == "" {
-	//					td.Md5 = CompactMd5(td)
-	//				}
-	//				if !start {
-	//					sb.WriteString(",\"")
-	//				} else {
-	//					sb.WriteString("\"")
-	//					start = false
-	//				}
-	//				sb.WriteString(td.Id)
-	//				sb.WriteString("\":\"")
-	//				sb.WriteString(td.Md5)
-	//				sb.WriteString("\"")
-	//				//r.checkSumMap[td.Id] = checkSum
-	//			}
-	//		default:
-	//			r.logger.Info("gen checksum",
-	//				zap.Int("len", i),
-	//				zap.Duration("cost", time.Since(btime)),
-	//			)
-	//			goto FINAL
-	//		}
-	//	}
-	//
-	//FINAL:
 	sb.WriteString("}")
 	btime = time.Now()
 	//r.logger.Info(sb.String())

@@ -65,6 +65,8 @@ func main() {
 	a = a[:0]
 	fmt.Println(len(a),cap(a))
 	fmt.Printf("%p\n",a)
-	//fmt.Println(a[8])
 
+	a = append(a , 1)
+	fmt.Println(len(a),cap(a))
+	fmt.Printf("%p\n",a)
 }

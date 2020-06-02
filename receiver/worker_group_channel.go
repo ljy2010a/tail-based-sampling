@@ -25,7 +25,7 @@ type ChannelGroupConsume struct {
 func NewChannelGroupConsume(receiver *Receiver, f func()) *ChannelGroupConsume {
 	// 300w = 10.67s , 13.15s
 	// 350w = 9.76s , 12.73s
-	// 500w = 1450MB , 6.98s , 9.52s
+	// 500w = 1450MB , 6.98s , 9.52s  7.33 , 9.21
 	return &ChannelGroupConsume{
 		receiver:     receiver,
 		logger:       receiver.logger,
@@ -82,17 +82,17 @@ func (c *ChannelGroupConsume) Read(rd io.Reader) {
 	if i != 0 {
 		c.lineChan <- lines[:i]
 	}
-	c.receiver.logger.Info("read file done ",
-		zap.Int("total", total),
-		zap.Int("sourceSize", size),
-		zap.Duration("cost", time.Since(btime)),
-	)
+	rtime := time.Since(btime)
 	ctime := time.Now()
 	close(c.lineChan)
+	c.receiver.lruCache.Resize(20_0000)
 	c.doneWg.Wait()
 	c.logger.Info("consumer all done",
+		zap.Duration("read cost", rtime),
 		zap.Duration("cost", time.Since(ctime)),
 		zap.Duration("total cost", time.Since(btime)),
+		zap.Int("total", total),
+		zap.Int("sourceSize", size),
 	)
 	c.doneFunc()
 }

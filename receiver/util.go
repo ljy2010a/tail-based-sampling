@@ -13,8 +13,6 @@ func SendWrongRequestB(td *common.TraceData, reqUrl string, b []byte, over strin
 		wg.Add(1)
 		defer wg.Done()
 	}
-
-	//b, _ := json.Marshal(td)
 	req := fasthttp.AcquireRequest()
 	defer fasthttp.ReleaseRequest(req)
 

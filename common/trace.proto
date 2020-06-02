@@ -10,14 +10,15 @@ package common;
 //export GOBIN=$GOPATH/bin
 //export PATH=$PATH:$GOPATH:$GOBIN
 
-// protoc --gofast_out=. trace.proto
+// protoc --gogofaster_out=. trace.proto
 // protoc -I=. -I=$GOPATH/src -I=$GOPATH/src/github.com/gogo/protobuf/protobuf --gogofaster_out=. trace.proto
 message TraceData {
     string Id = 1;
     string Source = 2;
     string Md5 = 3;
     bool Wrong = 4;
-    repeated SpanData Sd = 5;
+    int64 status = 5;
+    repeated SpanData Sd = 6;
 }
 
 message SpanData {

@@ -127,7 +127,6 @@ func (r *Receiver) Run() {
 		New: func() interface{} {
 			return &common.TraceData{
 				Sd:     []*common.SpanData{},
-				Id:     "",
 				Source: r.HttpPort,
 			}
 		},
@@ -135,34 +134,29 @@ func (r *Receiver) Run() {
 
 	r.spanPool = &sync.Pool{
 		New: func() interface{} {
-			return &common.SpanData{
-				TraceId:   "",
-				StartTime: "",
-				Tags:      []byte{},
-				Wrong:     false,
-			}
+			return &common.SpanData{}
 		},
 	}
 
 	// 10000条 = 2.9MB
 	// 6.5 * 20 * 2.9 = 377
-	//r.lruCache, err = lru.NewWithEvict(5_0000, func(key interface{}, value interface{}) {
+	//r.lruCache, err = lru.NewWithEvict(7_0000, func(key interface{}, value interface{}) {
 	//	td := value.(*common.TraceData)
-	//	for _, v := range td.Sd {
-	//		v.Clear()
-	//		r.spanPool.Put(v)
+	//	for i, _ := range td.Sd {
+	//		td.Sd[i].Reset()
+	//		r.spanPool.Put(td.Sd[i])
 	//	}
-	//	//td.Clear()
-	//	//r.tdPool.Put(td)
+	//	td.Clear()
+	//	r.tdPool.Put(td)
 	//})
-	r.lruCache, err = lru.New(5_0000)
+	r.lruCache, err = lru.New(3_0000)
 	if err != nil {
 		r.logger.Error("lru new fail",
 			zap.Error(err),
 		)
 	}
 
-	r.deleteChan = make(chan string, 5000)
+	r.deleteChan = make(chan string, 3000)
 	r.finishChan = make(chan interface{})
 	doneFunc := func() {
 		close(r.finishChan)
@@ -185,7 +179,7 @@ func (r *Receiver) Run() {
 }
 
 func (r *Receiver) ReadyHandler(c *gin.Context) {
-	r.logger.Info("ready", zap.String("port", r.HttpPort))
+	r.logger.Info("ReadyHandler", zap.String("port", r.HttpPort))
 	c.JSON(http.StatusOK, "ok")
 	return
 }
@@ -227,20 +221,21 @@ func (r *Receiver) QueryWrongHandler(c *gin.Context) {
 	if exist {
 		// 存在,表示缓存还在
 		// 等待过期即可
-		otd := tdi.(*common.TraceData)
-		otd.Wrong = true
 		if r.finishBool {
 			r.logger.Info("should exist map ",
 				zap.String("id", id),
 			)
 		}
+		otd := tdi.(*common.TraceData)
+		otd.Wrong = true
 	} else {
 		// 查找lru
 		ltdi, lexist := r.lruCache.Get(id)
 		if lexist {
 			ltd := ltdi.(*common.TraceData)
-			//b, _ := json.Marshal(ltd)
+			//b, _ := ltd.Marshal()
 			if over == "1" {
+				//SendWrongRequestB(ltd, r.CompactorSetWrongUrl, b, "", nil)
 				SendWrongRequest(ltd, r.CompactorSetWrongUrl, "", nil)
 				r.logger.Info("query wrong in over",
 					zap.String("id", id),
@@ -248,6 +243,7 @@ func (r *Receiver) QueryWrongHandler(c *gin.Context) {
 			} else {
 				r.lruCache.Remove(id)
 				go func() {
+					//SendWrongRequestB(ltd, r.CompactorSetWrongUrl, b, "", nil)
 					SendWrongRequest(ltd, r.CompactorSetWrongUrl, "", nil)
 				}()
 			}
@@ -266,7 +262,6 @@ func (r *Receiver) ConsumeTraceData(spans common.Spans) {
 		if etd, ok := idToSpans[id]; !ok {
 			//tdi := r.tdPool.Get()
 			//td := tdi.(*common.TraceData)
-
 			td := &common.TraceData{
 				Sd:     []*common.SpanData{},
 				Source: r.HttpPort,
@@ -274,7 +269,13 @@ func (r *Receiver) ConsumeTraceData(spans common.Spans) {
 			td.Id = id
 			td.Sd = append(td.Sd, span)
 			idToSpans[id] = td
+			//if !td.Wrong && span.Wrong {
+			//	td.Wrong = true
+			//}
 		} else {
+			//if !etd.Wrong && span.Wrong {
+			//	etd.Wrong = true
+			//}
 			etd.Sd = append(etd.Sd, span)
 		}
 	}
@@ -285,11 +286,14 @@ func (r *Receiver) ConsumeTraceData(spans common.Spans) {
 			// 已存在
 			td := tdi.(*common.TraceData)
 			td.Add(etd.Sd)
+			//if !td.Wrong && etd.Wrong {
+			//	td.Wrong = true
+			//}
 			//etd.Clear()
 			//r.tdPool.Put(etd)
 		} else {
-			postDeletion := false
 			// 淘汰一个
+			postDeletion := false
 			for !postDeletion {
 				select {
 				case r.deleteChan <- id:
@@ -314,10 +318,8 @@ func (r *Receiver) dropTrace(id string, over string) {
 		return
 	}
 	td := d.(*common.TraceData)
-	//if !keep {
-	r.lruCache.Add(id, td)
-	r.idToTrace.Delete(id)
-	//}
+	//r.lruCache.Add(id, t
+	//r.idToTrace.Delete(id)
 
 	//spLen := len(td.Sd)
 	//if r.maxSpanNums < spLen {
@@ -343,42 +345,37 @@ func (r *Receiver) dropTrace(id string, over string) {
 		}
 	}
 
-	//r.idToTrace.Delete(id)
+	r.idToTrace.Delete(id)
 	if wrong {
-		//r.lruCache.Remove(id)
 		//r.logger.Info("send wrong id", zap.String("id", id))
-		//b, _ := json.Marshal(td)
+		//b, _ := td.Marshal()
 		//go SendWrongRequestB(td, r.CompactorSetWrongUrl, b, over, &r.overWg)
-
 		go SendWrongRequest(td, r.CompactorSetWrongUrl, over, &r.overWg)
 		return
 	}
-	//r.lruCache.Add(id, td)
+	r.lruCache.Add(id, td)
 }
 
 func (r *Receiver) finish() {
 	btime := time.Now()
+	ftime := time.Second
 	fwg := sync.WaitGroup{}
 	fonce := sync.Once{}
-	r.logger.Info("start clear less")
 	for i := 0; i < 2; i++ {
 		fwg.Add(1)
 		go func() {
 			defer fwg.Done()
 			<-r.finishChan
+			fonce.Do(func() {
+				r.logger.Info("finish start")
+				btime = time.Now()
+			})
 			for {
-				fonce.Do(func() {
-					btime = time.Now()
-				})
 				select {
 				case id := <-r.deleteChan:
 					r.dropTrace(id, "1")
 				default:
-					r.logger.Info("clear less succ",
-						zap.Duration("cost", time.Since(btime)),
-						zap.Int64("traceNum", r.traceNums),
-						zap.Int("maxSpLen", r.maxSpanNums),
-					)
+					ftime = time.Since(btime)
 					return
 				}
 			}
@@ -388,8 +385,9 @@ func (r *Receiver) finish() {
 	fwg.Wait()
 	r.finishBool = true
 	r.overWg.Wait()
-	r.logger.Info("clear less over",
-		zap.Duration("cost", time.Since(btime)),
+	r.logger.Info("finish over",
+		zap.Duration("finish cost", ftime),
+		zap.Duration("total cost", time.Since(btime)),
 		zap.Int64("traceNum", r.traceNums),
 		zap.Int("maxSpLen", r.maxSpanNums),
 		zap.Int("minSpanNums", r.minSpanNums),
@@ -420,12 +418,11 @@ var (
 )
 
 func (r *Receiver) ParseSpanData(line []byte) *common.SpanData {
-	//spanDatai := r.spanPool.Get()
-	//spanData := spanDatai.(*common.SpanData)
-
 	if len(line) < 60 {
 		return nil
 	}
+	//spanDatai := r.spanPool.Get()
+	//spanData := spanDatai.(*common.SpanData)
 	spanData := &common.SpanData{}
 	firstIdx := bytes.Index(line, S1)
 	spanData.TraceId = common.BytesToString(line[:firstIdx])
