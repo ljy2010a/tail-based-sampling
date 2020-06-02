@@ -237,6 +237,8 @@ func (r *Receiver) QueryWrongHandler(c *gin.Context) {
 		if lexist {
 			ltd := ltdi.(*common.TraceData)
 			//b, _ := ltd.Marshal()
+			//if ltd.GetStatusL() == common.TraceStatusDone {
+			//	ltd.SetStatusL(common.TraceStatusSended)
 			if over == "1" {
 				//SendWrongRequestB(ltd, r.CompactorSetWrongUrl, b, "", nil)
 				SendWrongRequest(ltd, r.CompactorSetWrongUrl, "", nil)
@@ -250,6 +252,7 @@ func (r *Receiver) QueryWrongHandler(c *gin.Context) {
 					SendWrongRequest(ltd, r.CompactorSetWrongUrl, "", nil)
 				}()
 			}
+			//}
 		}
 	}
 	c.JSON(http.StatusOK, "")
@@ -297,8 +300,11 @@ func (r *Receiver) ConsumeTraceData(spans common.Spans) {
 			//r.tdPool.Put(etd)
 		} else {
 			//if etd.Wrong {
-			//	// noti
+			//	// notify
+			//	mockTd := &common.TraceData{Id: id, Source: r.HttpPort, Status: common.TraceStatusInit}
+			//	go SendWrongRequest(mockTd, r.CompactorSetWrongUrl, "", nil)
 			//}
+			//etd.SetStatusL(common.TraceStatusReady)
 			// 淘汰一个
 			postDeletion := false
 			for !postDeletion {
@@ -325,7 +331,7 @@ func (r *Receiver) dropTrace(id string, over string) {
 		return
 	}
 	td := d.(*common.TraceData)
-	//r.lruCache.Add(id, t
+	//r.lruCache.Add(id, td)
 	//r.idToTrace.Delete(id)
 
 	//spLen := len(td.Sd)
@@ -351,22 +357,21 @@ func (r *Receiver) dropTrace(id string, over string) {
 			wrong = true
 		}
 	}
+	//if over != "1" {
+	//	r.idToTrace.Delete(id)
+	//}
 
 	r.idToTrace.Delete(id)
 	if wrong {
 		//r.logger.Info("send wrong id", zap.String("id", id))
 		//b, _ := td.Marshal()
 		//go SendWrongRequestB(td, r.CompactorSetWrongUrl, b, over, &r.overWg)
-		//td.Status = 1
+		//td.SetStatusL(common.TraceStatusSended)
 		go SendWrongRequest(td, r.CompactorSetWrongUrl, over, &r.overWg)
 		return
 	}
+	//td.SetStatusL(common.TraceStatusDone)
 	r.lruCache.Add(id, td)
-
-	//if over != "1" {
-	//	r.idToTrace.Delete(id)
-	//	r.lruCache.Add(id, td)
-	//}
 }
 
 func (r *Receiver) finish() {

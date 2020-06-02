@@ -3,6 +3,15 @@ package compactor
 import (
 	"fmt"
 	"github.com/valyala/fasthttp"
+	"time"
+)
+
+var (
+	c = &fasthttp.Client{
+		MaxConnsPerHost: 10000,
+		ReadTimeout:     400 * time.Millisecond,
+		WriteTimeout:    400 * time.Millisecond,
+	}
 )
 
 func NotifyAnotherWrong(reqUrl string) {
@@ -16,7 +25,7 @@ func NotifyAnotherWrong(reqUrl string) {
 	resp := fasthttp.AcquireResponse()
 	defer fasthttp.ReleaseResponse(resp)
 
-	if err := fasthttp.Do(req, resp); err != nil {
+	if err := c.Do(req, resp); err != nil {
 		fmt.Printf("notify wrong fail reqUrl[%v] err[%v] \n", reqUrl, err)
 		return
 	}
@@ -37,7 +46,7 @@ func ReportCheckSumString(checkSumMap string, reqUrl string) {
 	resp := fasthttp.AcquireResponse()
 	defer fasthttp.ReleaseResponse(resp)
 
-	if err := fasthttp.Do(req, resp); err != nil {
+	if err := c.Do(req, resp); err != nil {
 		fmt.Printf("report checkSum fail reqUrl[%v] err[%v] \n", reqUrl, err)
 		return
 	}

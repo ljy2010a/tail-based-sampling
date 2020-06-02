@@ -5,6 +5,15 @@ import (
 	"github.com/ljy2010a/tailf-based-sampling/common"
 	"github.com/valyala/fasthttp"
 	"sync"
+	"time"
+)
+
+var (
+	c = &fasthttp.Client{
+		MaxConnsPerHost: 10000,
+		ReadTimeout:     400 * time.Millisecond,
+		WriteTimeout:    400 * time.Millisecond,
+	}
 )
 
 func SendWrongRequestB(td *common.TraceData, reqUrl string, b []byte, over string, wg *sync.WaitGroup) {
@@ -24,7 +33,7 @@ func SendWrongRequestB(td *common.TraceData, reqUrl string, b []byte, over strin
 	resp := fasthttp.AcquireResponse()
 	defer fasthttp.ReleaseResponse(resp)
 
-	if err := fasthttp.Do(req, resp); err != nil {
+	if err := c.Do(req, resp); err != nil {
 		fmt.Printf("set wrong fail id[%v] reqUrl[%v], err[%v] \n", td.Id, reqUrl, err)
 		return
 	}
@@ -54,7 +63,7 @@ func SendWrongRequest(td *common.TraceData, reqUrl string, over string, wg *sync
 	resp := fasthttp.AcquireResponse()
 	defer fasthttp.ReleaseResponse(resp)
 
-	if err := fasthttp.Do(req, resp); err != nil {
+	if err := c.Do(req, resp); err != nil {
 		fmt.Printf("set wrong fail id[%v] reqUrl[%v], err[%v] \n", td.Id, reqUrl, err)
 		return
 	}

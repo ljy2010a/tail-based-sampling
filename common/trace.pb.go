@@ -32,7 +32,7 @@ type TraceData struct {
 	Wrong  bool        `protobuf:"varint,4,opt,name=Wrong,proto3" json:"Wrong,omitempty"`
 	Status int64       `protobuf:"varint,5,opt,name=status,proto3" json:"status,omitempty"`
 	Sd     []*SpanData `protobuf:"bytes,6,rep,name=Sd,proto3" json:"Sd,omitempty"`
-	sync.Mutex
+	sync.RWMutex
 }
 
 func (m *TraceData) Reset()         { *m = TraceData{} }

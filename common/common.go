@@ -1,15 +1,36 @@
 package common
 
+const (
+	TraceStatusInit   = 0
+	TraceStatusSended = 1
+	TraceStatusReady  = 2
+	TraceStatusDone   = 3
+
+)
+
 func (m *TraceData) Clear() {
 	m.Sd = m.Sd[:0]
 	m.Id = ""
 	m.Md5 = ""
+	m.Status = TraceStatusInit
 	m.Wrong = false
 }
 
 func (m *TraceData) Add(newTd []*SpanData) {
 	m.Lock()
 	m.Sd = append(m.Sd, newTd...)
+	m.Unlock()
+}
+
+func (m *TraceData) GetStatusL() int64 {
+	m.RLock()
+	defer m.RUnlock()
+	return m.Status
+}
+
+func (m *TraceData) SetStatusL(status int64) {
+	m.Lock()
+	m.Status = status
 	m.Unlock()
 }
 

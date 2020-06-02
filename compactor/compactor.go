@@ -24,7 +24,7 @@ type Compactor struct {
 	finishChan  chan interface{}
 	checkSumMap map[string]string
 	closeTimes  int64
-	resultChan  chan string
+	//resultChan  chan string
 	idToTrace   sync.Map
 	startTime   time.Time
 }
@@ -79,7 +79,7 @@ func (r *Compactor) Run() {
 		}
 	}()
 
-	r.resultChan = make(chan string, 10000)
+	//r.resultChan = make(chan string, 10000)
 	r.finishChan = make(chan interface{})
 	r.checkSumMap = make(map[string]string)
 	go r.finish()
@@ -141,7 +141,7 @@ func (r *Compactor) SetWrongHandler(c *gin.Context) {
 
 	tdi, exist := r.idToTrace.LoadOrStore(td.Id, td)
 	if !exist {
-		r.resultChan <- td.Id
+		//r.resultChan <- td.Id
 		// notify another
 		anotherPort := "8000"
 		if td.Source == "8000" {
@@ -151,6 +151,12 @@ func (r *Compactor) SetWrongHandler(c *gin.Context) {
 		NotifyAnotherWrong(reportUrl)
 	} else {
 		otd := tdi.(*common.TraceData)
+
+		//if td.GetStatusL() == common.TraceStatusInit {
+		//	r.logger.Info("td already exist ", zap.String("id", otd.Id))
+		//	c.AbortWithStatus(http.StatusOK)
+		//	return
+		//}
 		if otd.Md5 != "" {
 			r.logger.Info("md5 already exist ", zap.String("id", otd.Id))
 			c.AbortWithStatus(http.StatusOK)
@@ -163,6 +169,18 @@ func (r *Compactor) SetWrongHandler(c *gin.Context) {
 		}
 		otd.Add(td.Sd)
 		otd.Md5 = CompactMd5(otd)
+
+		//times := atomic.AddInt64(&otd.Status, 1)
+		//if times == 1 {
+		//	otd.Add(td.Sd)
+		//} else if times == 2 {
+		//	otd.Add(td.Sd)
+		//	otd.Md5 = CompactMd5(otd)
+		//} else {
+		//	r.logger.Info("request more 2 ",
+		//		zap.String("id", otd.Id),
+		//	)
+		//}
 	}
 	c.AbortWithStatus(http.StatusOK)
 	return
