@@ -149,7 +149,7 @@ func (r *Receiver) Run() {
 	//	td.Clear()
 	//	r.tdPool.Put(td)
 	//})
-	r.lruCache, err = lru.New(3_0000)
+	r.lruCache, err = lru.New(4_0000)
 	if err != nil {
 		r.logger.Error("lru new fail",
 			zap.Error(err),
