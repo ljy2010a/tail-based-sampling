@@ -2,7 +2,6 @@ package receiver
 
 import (
 	"bufio"
-	"github.com/ljy2010a/tailf-based-sampling/common"
 	"go.uber.org/zap"
 	"io"
 	"sync"
@@ -19,8 +18,8 @@ type ChannelGroupConsume struct {
 	overFunc     func()
 	doneOnce     sync.Once
 	doneWg       sync.WaitGroup
-	groupNum     int
-	workNum      int
+	//groupNum     int
+	workNum int
 }
 
 func NewChannelGroupConsume(receiver *Receiver, readDone func(), over func()) *ChannelGroupConsume {
@@ -30,9 +29,9 @@ func NewChannelGroupConsume(receiver *Receiver, readDone func(), over func()) *C
 	return &ChannelGroupConsume{
 		receiver:     receiver,
 		logger:       receiver.logger,
-		lineChan:     make(chan [][]byte, 10000),
-		lineGroupNum: 500,
-		groupNum:     5000,
+		lineChan:     make(chan [][]byte, 1000),
+		lineGroupNum: 5000,
+		//groupNum:     5000,
 		readBufSize:  16 * 1024,
 		workNum:      2,
 		readDoneFunc: readDone,
@@ -91,7 +90,7 @@ func (c *ChannelGroupConsume) Read(rd io.Reader) {
 	c.doneWg.Wait()
 	c.logger.Info("consumer all done",
 		zap.Duration("read cost", rtime),
-		zap.Duration("cost", time.Since(ctime)),
+		zap.Duration("less cost", time.Since(ctime)),
 		zap.Duration("total cost", time.Since(btime)),
 		zap.Int("total", total),
 		zap.Int("sourceSize", size),
@@ -112,8 +111,8 @@ func (c *ChannelGroupConsume) consume() {
 	btime := time.Now()
 	size := 0
 	wrong := 0
-	spanDatas := make([]*common.SpanData, c.groupNum)
-	i := 0
+	//spanDatas := make([]*common.SpanData, c.groupNum)
+	//i := 0
 	//go func() {
 	//	c.logger.Info("read stat",
 	//		zap.Int("wrong", wrong),
@@ -126,29 +125,34 @@ func (c *ChannelGroupConsume) consume() {
 		once.Do(func() {
 			btime = time.Now()
 		})
-		for _, line := range lines {
-			size++
-			spanData := c.receiver.ParseSpanData(line)
-			if spanData == nil {
-				continue
-			}
-			if spanData.Wrong {
-				wrong++
-			}
-			if i < c.groupNum {
-				spanDatas[i] = spanData
-			}
-			if i == c.groupNum-1 {
-				c.receiver.ConsumeTraceData(spanDatas)
-				i = 0
-				continue
-			}
-			i++
-		}
+		size += len(lines)
+		c.receiver.ConsumeByte(lines)
+		//for _, line := range lines {
+		//	size++
+		//	if len(line) < 60 {
+		//		continue
+		//	}
+		//	spanData := c.receiver.ParseSpanData(line)
+		//	if spanData == nil {
+		//		continue
+		//	}
+		//	if spanData.Wrong {
+		//		wrong++
+		//	}
+		//	if i < c.groupNum {
+		//		spanDatas[i] = spanData
+		//	}
+		//	if i == c.groupNum-1 {
+		//		c.receiver.ConsumeTraceData(spanDatas)
+		//		i = 0
+		//		continue
+		//	}
+		//	i++
+		//}
 	}
-	if i != 0 {
-		c.receiver.ConsumeTraceData(spanDatas[:i])
-	}
+	//if i != 0 {
+	//	c.receiver.ConsumeTraceData(spanDatas[:i])
+	//}
 	c.logger.Info("deal file done ",
 		zap.Int("wrong", wrong),
 		zap.Int("dealSize", size),

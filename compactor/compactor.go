@@ -1,6 +1,7 @@
 package compactor
 
 import (
+	"bytes"
 	"crypto/md5"
 	"encoding/hex"
 	"fmt"
@@ -25,8 +26,8 @@ type Compactor struct {
 	checkSumMap map[string]string
 	closeTimes  int64
 	//resultChan  chan string
-	idToTrace   sync.Map
-	startTime   time.Time
+	idToTrace sync.Map
+	startTime time.Time
 }
 
 func (r *Compactor) Run() {
@@ -167,7 +168,8 @@ func (r *Compactor) SetWrongHandler(c *gin.Context) {
 			c.AbortWithStatus(http.StatusOK)
 			return
 		}
-		otd.Add(td.Sd)
+		//otd.Add(td.Sd)
+		otd.AddSpan(td.Sb)
 		otd.Md5 = CompactMd5(otd)
 
 		//times := atomic.AddInt64(&otd.Status, 1)
@@ -250,9 +252,14 @@ func (r *Compactor) finish() {
 }
 
 func CompactMd5(td *common.TraceData) string {
-	sort.Sort(common.Spans(td.Sd))
+	//sort.Sort(td.Sb)
+	spans := common.Spans{}
+	for _, sb := range td.Sb {
+		spans = append(spans, ParseSpanData(sb))
+	}
+	sort.Sort(spans)
 	h := md5.New()
-	for _, span := range td.Sd {
+	for _, span := range spans {
 		h.Write(span.Tags)
 		h.Write([]byte("\n"))
 		//if td.Id == "c074d0a90cd607b" {
@@ -263,4 +270,17 @@ func CompactMd5(td *common.TraceData) string {
 	//	fmt.Println(strings.ToUpper(hex.EncodeToString(h.Sum(nil))))
 	//}
 	return strings.ToUpper(hex.EncodeToString(h.Sum(nil)))
+}
+
+var (
+	S1 = []byte("|")
+)
+
+func ParseSpanData(line []byte) *common.SpanData {
+	spanData := &common.SpanData{}
+	firstIdx := bytes.Index(line, S1)
+	secondIdx := bytes.Index(line[firstIdx+1:], S1)
+	spanData.StartTime = common.BytesToString(line[firstIdx+1 : firstIdx+1+secondIdx])
+	spanData.Tags = line
+	return spanData
 }

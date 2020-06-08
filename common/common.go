@@ -8,31 +8,26 @@ const (
 
 )
 
-func (m *TraceData) Clear() {
-	m.Sd = m.Sd[:0]
-	m.Id = ""
-	m.Md5 = ""
-	m.Status = TraceStatusInit
-	m.Wrong = false
-}
+//func (m *TraceData) Clear() {
+//	m.Sd = m.Sd[:0]
+//	m.Id = ""
+//	m.Md5 = ""
+//	m.Status = TraceStatusInit
+//	m.Wrong = false
+//}
+//
+//func (m *TraceData) Add(newTd []*SpanData) {
+//	m.Lock()
+//	m.Sd = append(m.Sd, newTd...)
+//	m.Unlock()
+//}
 
-func (m *TraceData) Add(newTd []*SpanData) {
+func (m *TraceData) AddSpan(newTd [][]byte) {
 	m.Lock()
-	m.Sd = append(m.Sd, newTd...)
+	m.Sb = append(m.Sb, newTd...)
 	m.Unlock()
 }
 
-func (m *TraceData) GetStatusL() int64 {
-	m.RLock()
-	defer m.RUnlock()
-	return m.Status
-}
-
-func (m *TraceData) SetStatusL(status int64) {
-	m.Lock()
-	m.Status = status
-	m.Unlock()
-}
 
 // traceId：全局唯一的Id，用作整个链路的唯一标识与组装
 //startTime：调用的开始时间

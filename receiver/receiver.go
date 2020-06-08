@@ -36,9 +36,9 @@ type Receiver struct {
 	maxSpanNums int
 	minSpanNums int
 	overWg      sync.WaitGroup
-	tdPool      *sync.Pool
-	spanPool    *sync.Pool
-	AutoDetect  bool
+	//tdPool      *sync.Pool
+	//spanPool    *sync.Pool
+	AutoDetect bool
 }
 
 func (r *Receiver) Run() {
@@ -123,20 +123,20 @@ func (r *Receiver) Run() {
 	//		)
 	//	}
 	//}()
-	r.tdPool = &sync.Pool{
-		New: func() interface{} {
-			return &common.TraceData{
-				Sd:     []*common.SpanData{},
-				Source: r.HttpPort,
-			}
-		},
-	}
-
-	r.spanPool = &sync.Pool{
-		New: func() interface{} {
-			return &common.SpanData{}
-		},
-	}
+	//r.tdPool = &sync.Pool{
+	//	New: func() interface{} {
+	//		return &common.TraceData{
+	//			//Sd:     []*common.SpanData{},
+	//			Source: r.HttpPort,
+	//		}
+	//	},
+	//}
+	//
+	//r.spanPool = &sync.Pool{
+	//	New: func() interface{} {
+	//		return &common.SpanData{}
+	//	},
+	//}
 
 	// 10000条 = 2.9MB
 	// 6.5 * 20 * 2.9 = 377
@@ -149,7 +149,7 @@ func (r *Receiver) Run() {
 	//	td.Clear()
 	//	r.tdPool.Put(td)
 	//})
-	r.lruCache, err = lru.New(4_0000)
+	r.lruCache, err = lru.New(5_0000)
 	if err != nil {
 		r.logger.Error("lru new fail",
 			zap.Error(err),
@@ -259,30 +259,104 @@ func (r *Receiver) QueryWrongHandler(c *gin.Context) {
 	return
 }
 
-func (r *Receiver) ConsumeTraceData(spans common.Spans) {
+//func (r *Receiver) ConsumeTraceData(spans common.Spans) {
+//
+//	idToSpans := make(map[string]*common.TraceData)
+//	for _, span := range spans {
+//		id := span.TraceId
+//		span.TraceId = ""
+//		if etd, ok := idToSpans[id]; !ok {
+//			//tdi := r.tdPool.Get()
+//			//td := tdi.(*common.TraceData)
+//			td := &common.TraceData{
+//				Sd:     []*common.SpanData{},
+//				Source: r.HttpPort,
+//			}
+//			td.Id = id
+//			td.Sd = append(td.Sd, span)
+//			idToSpans[id] = td
+//			//if !td.Wrong && span.Wrong {
+//			//	td.Wrong = true
+//			//}
+//		} else {
+//			//if !etd.Wrong && span.Wrong {
+//			//	etd.Wrong = true
+//			//}
+//			etd.Sd = append(etd.Sd, span)
+//		}
+//	}
+//
+//	for id, etd := range idToSpans {
+//		tdi, exist := r.idToTrace.LoadOrStore(id, etd)
+//		if exist {
+//			// 已存在
+//			td := tdi.(*common.TraceData)
+//			td.Add(etd.Sd)
+//			//if !td.Wrong && etd.Wrong {
+//			//	// noti
+//			//	td.Wrong = true
+//			//}
+//			//etd.Clear()
+//			//r.tdPool.Put(etd)
+//		} else {
+//			//if etd.Wrong {
+//			//	// notify
+//			//	mockTd := &common.TraceData{Id: id, Source: r.HttpPort, Status: common.TraceStatusInit}
+//			//	go SendWrongRequest(mockTd, r.CompactorSetWrongUrl, "", nil)
+//			//}
+//			//etd.SetStatusL(common.TraceStatusReady)
+//			// 淘汰一个
+//			postDeletion := false
+//			for !postDeletion {
+//				select {
+//				case r.deleteChan <- id:
+//					postDeletion = true
+//				default:
+//					dropId, ok := <-r.deleteChan
+//					if ok {
+//						r.dropTrace(dropId, "0")
+//					}
+//				}
+//			}
+//		}
+//	}
+//}
+
+func (r *Receiver) ConsumeByte(lines [][]byte) {
 
 	idToSpans := make(map[string]*common.TraceData)
-	for _, span := range spans {
-		id := span.TraceId
-		span.TraceId = ""
+	for _, line := range lines {
+		id := r.GetTraceIdFromByte(line)
+
+		//id := span.TraceId
+		//span.TraceId = ""
 		if etd, ok := idToSpans[id]; !ok {
 			//tdi := r.tdPool.Get()
 			//td := tdi.(*common.TraceData)
 			td := &common.TraceData{
-				Sd:     []*common.SpanData{},
+				//Sd:     []*common.SpanData{},
 				Source: r.HttpPort,
+				Sb:     [][]byte{},
 			}
 			td.Id = id
-			td.Sd = append(td.Sd, span)
+			td.Sb = append(td.Sb, line)
+			//td.Sd = append(td.Sd, span)
 			idToSpans[id] = td
 			//if !td.Wrong && span.Wrong {
 			//	td.Wrong = true
 			//}
+			if !td.Wrong && r.IfSpanWrong(line) {
+				td.Wrong = true
+			}
 		} else {
 			//if !etd.Wrong && span.Wrong {
 			//	etd.Wrong = true
 			//}
-			etd.Sd = append(etd.Sd, span)
+			if !etd.Wrong && r.IfSpanWrong(line) {
+				etd.Wrong = true
+			}
+			etd.Sb = append(etd.Sb, line)
+			//etd.Sd = append(etd.Sd, span)
 		}
 	}
 
@@ -291,11 +365,11 @@ func (r *Receiver) ConsumeTraceData(spans common.Spans) {
 		if exist {
 			// 已存在
 			td := tdi.(*common.TraceData)
-			td.Add(etd.Sd)
-			//if !td.Wrong && etd.Wrong {
-			//	// noti
-			//	td.Wrong = true
-			//}
+			td.AddSpan(etd.Sb)
+			if !td.Wrong && etd.Wrong {
+				// noti
+				td.Wrong = true
+			}
 			//etd.Clear()
 			//r.tdPool.Put(etd)
 		} else {
@@ -314,6 +388,7 @@ func (r *Receiver) ConsumeTraceData(spans common.Spans) {
 				default:
 					dropId, ok := <-r.deleteChan
 					if ok {
+						//r.idToTrace.Delete(dropId)
 						r.dropTrace(dropId, "0")
 					}
 				}
@@ -331,9 +406,6 @@ func (r *Receiver) dropTrace(id string, over string) {
 		return
 	}
 	td := d.(*common.TraceData)
-	//r.lruCache.Add(id, td)
-	//r.idToTrace.Delete(id)
-
 	//spLen := len(td.Sd)
 	//if r.maxSpanNums < spLen {
 	//	r.maxSpanNums = spLen
@@ -343,34 +415,16 @@ func (r *Receiver) dropTrace(id string, over string) {
 	//}
 	wrong := td.Wrong
 	if !wrong {
-		for _, span := range td.Sd {
-			if span.Wrong {
-				wrong = true
-			}
-		}
-	}
-
-	// 再次检测缓存map
-	if !wrong {
 		_, ok := r.wrongIdMap.Load(td.Id)
 		if ok {
 			wrong = true
 		}
 	}
-	//if over != "1" {
-	//	r.idToTrace.Delete(id)
-	//}
-
 	r.idToTrace.Delete(id)
 	if wrong {
-		//r.logger.Info("send wrong id", zap.String("id", id))
-		//b, _ := td.Marshal()
-		//go SendWrongRequestB(td, r.CompactorSetWrongUrl, b, over, &r.overWg)
-		//td.SetStatusL(common.TraceStatusSended)
 		go SendWrongRequest(td, r.CompactorSetWrongUrl, over, &r.overWg)
 		return
 	}
-	//td.SetStatusL(common.TraceStatusDone)
 	r.lruCache.Add(id, td)
 }
 
@@ -435,10 +489,22 @@ var (
 	S1       = []byte("|")
 )
 
-func (r *Receiver) ParseSpanData(line []byte) *common.SpanData {
-	if len(line) < 60 {
-		return nil
+func (r *Receiver) GetTraceIdFromByte(line []byte) string {
+	firstIdx := bytes.Index(line, S1)
+	return common.BytesToString(line[:firstIdx])
+}
+
+func (r *Receiver) IfSpanWrong(line []byte) bool {
+	if bytes.Contains(line, Ferr1) {
+		return true
 	}
+	if bytes.Contains(line, FCode) && !bytes.Contains(line, FCode200) {
+		return true
+	}
+	return false
+}
+
+func (r *Receiver) ParseSpanData(line []byte) *common.SpanData {
 	//spanDatai := r.spanPool.Get()
 	//spanData := spanDatai.(*common.SpanData)
 	spanData := &common.SpanData{}
