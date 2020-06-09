@@ -1,11 +1,10 @@
 package common
 
 const (
-	TraceStatusInit   = 0
+	//TraceStatusInit   = 0
 	TraceStatusSended = 1
 	TraceStatusReady  = 2
 	TraceStatusDone   = 3
-
 )
 
 //func (m *TraceData) Clear() {

@@ -2,6 +2,7 @@ package receiver
 
 import (
 	"bufio"
+	"fmt"
 	"go.uber.org/zap"
 	"io"
 	"sync"
@@ -29,7 +30,7 @@ func NewChannelGroupConsume(receiver *Receiver, readDone func(), over func()) *C
 	return &ChannelGroupConsume{
 		receiver:     receiver,
 		logger:       receiver.logger,
-		lineChan:     make(chan [][]byte, 1000),
+		lineChan:     make(chan [][]byte, 1200),
 		lineGroupNum: 5000,
 		//groupNum:     5000,
 		readBufSize:  16 * 1024,
@@ -41,12 +42,12 @@ func NewChannelGroupConsume(receiver *Receiver, readDone func(), over func()) *C
 
 func (c *ChannelGroupConsume) Read(rd io.Reader) {
 	c.logger.Info("read start")
-	//defer func() {
-	//	err := recover()
-	//	if err != nil {
-	//		c.logger.Error("", zap.String("err", fmt.Sprintf("%v", err)))
-	//	}
-	//}()
+	defer func() {
+		err := recover()
+		if err != nil {
+			c.logger.Error("", zap.String("err", fmt.Sprintf("%v", err)))
+		}
+	}()
 	btime := time.Now()
 	br := bufio.NewReaderSize(rd, c.readBufSize)
 	size := 0
@@ -57,6 +58,8 @@ func (c *ChannelGroupConsume) Read(rd io.Reader) {
 	//	)
 	//	time.Sleep(10 * time.Second)
 	//}()
+	maxLine := 0
+	minLine := 0
 	i := 0
 	lines := make([][]byte, c.lineGroupNum)
 	for {
@@ -65,6 +68,13 @@ func (c *ChannelGroupConsume) Read(rd io.Reader) {
 			break
 		}
 		size += len(line)
+		//lLen := len(line)
+		//if maxLine < lLen {
+		//	maxLine = lLen
+		//}
+		//if minLine > lLen || minLine == 0 {
+		//	minLine = lLen
+		//}
 		total++
 		nline := make([]byte, len(line))
 		copy(nline, line)
@@ -92,6 +102,8 @@ func (c *ChannelGroupConsume) Read(rd io.Reader) {
 		zap.Duration("read cost", rtime),
 		zap.Duration("less cost", time.Since(ctime)),
 		zap.Duration("total cost", time.Since(btime)),
+		zap.Int("maxLine", maxLine),
+		zap.Int("minLine", minLine),
 		zap.Int("total", total),
 		zap.Int("sourceSize", size),
 	)
@@ -105,6 +117,12 @@ func (c *ChannelGroupConsume) StartConsume() {
 }
 
 func (c *ChannelGroupConsume) consume() {
+	defer func() {
+		err := recover()
+		if err != nil {
+			c.logger.Error("", zap.String("err", fmt.Sprintf("%v", err)))
+		}
+	}()
 	c.doneWg.Add(1)
 	defer c.doneWg.Done()
 

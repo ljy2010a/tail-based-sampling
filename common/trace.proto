@@ -17,8 +17,7 @@ message TraceData {
     string Source = 2;
     string Md5 = 3;
     bool Wrong = 4;
-//    int64 status = 5;
-//    repeated SpanData Sd = 6;
+    int64 status = 5;
     repeated bytes Sb = 7;
 }
 

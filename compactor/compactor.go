@@ -31,6 +31,12 @@ type Compactor struct {
 }
 
 func (r *Compactor) Run() {
+	defer func() {
+		err := recover()
+		if err != nil {
+			fmt.Println(err)
+		}
+	}()
 	r.logger, _ = zap.NewProduction()
 	defer r.logger.Sync()
 	go func() {

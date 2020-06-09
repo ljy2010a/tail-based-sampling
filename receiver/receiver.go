@@ -20,7 +20,7 @@ type Receiver struct {
 	CompactorPort        string // 8002
 	CompactorSetWrongUrl string
 	logger               *zap.Logger
-	idToTrace            sync.Map
+	//idToTrace            sync.Map
 
 	deleteChan chan string
 	finishBool bool
@@ -30,6 +30,7 @@ type Receiver struct {
 
 	wrongIdMap sync.Map
 	lruCache   *lru.Cache
+	//freeCache *freecache.Cache
 	//consumer   *ChannelConsume
 	consumer    *ChannelGroupConsume
 	traceNums   int64
@@ -66,7 +67,7 @@ func (r *Receiver) Run() {
 		if !r.AutoDetect {
 			return
 		}
-		time.Sleep(30 * time.Second)
+		time.Sleep(5 * time.Second)
 		if r.DataPort != "" {
 			r.logger.Info("has dataport")
 			return
@@ -149,13 +150,14 @@ func (r *Receiver) Run() {
 	//	td.Clear()
 	//	r.tdPool.Put(td)
 	//})
-	r.lruCache, err = lru.New(5_0000)
+	r.lruCache, err = lru.New(6_0000)
 	if err != nil {
 		r.logger.Error("lru new fail",
 			zap.Error(err),
 		)
 	}
 
+	//r.freeCache = freecache.NewCache(18_0000)
 	r.deleteChan = make(chan string, 3000)
 	r.finishChan = make(chan interface{})
 	doneFunc := func() {
@@ -198,9 +200,6 @@ func (r *Receiver) SetParamHandler(c *gin.Context) {
 	if r.HttpPort == "8000" {
 		dataUrl := fmt.Sprintf("http://127.0.0.1:%s/trace1.data", r.DataPort)
 		go r.ReadHttp(dataUrl)
-
-		//dataUrl2 := fmt.Sprintf("http://127.0.0.1:%s/trace2.data", r.DataPort)
-		//go r.ReadHttp(dataUrl2)
 	}
 
 	if r.HttpPort == "8001" {
@@ -220,41 +219,87 @@ func (r *Receiver) QueryWrongHandler(c *gin.Context) {
 	//		zap.String("id", id),
 	//	)
 	//}
-	tdi, exist := r.idToTrace.Load(id)
-	if exist {
-		// 存在,表示缓存还在
-		// 等待过期即可
-		if r.finishBool {
-			r.logger.Info("should exist map ",
-				zap.String("id", id),
-			)
-		}
-		otd := tdi.(*common.TraceData)
-		otd.Wrong = true
-	} else {
-		// 查找lru
-		ltdi, lexist := r.lruCache.Get(id)
-		if lexist {
-			ltd := ltdi.(*common.TraceData)
+	//tdi, exist := r.lruCache.Get(id)
+	//if exist {
+	//	// 存在,表示缓存还在
+	//	// 等待过期即可
+	//	if r.finishBool {
+	//		r.logger.Info("should exist map ",
+	//			zap.String("id", id),
+	//		)
+	//	}
+	//	otd := tdi.(*common.TraceData)
+	//	otd.Wrong = true
+	//} else {
+	// 查找lru
+	ltdi, lexist := r.lruCache.Get(id)
+	if lexist {
+		ltd := ltdi.(*common.TraceData)
+		ltd.Wrong = true
+		if ltd.Status == common.TraceStatusDone {
+			ltd.Status = common.TraceStatusSended
 			//b, _ := ltd.Marshal()
-			//if ltd.GetStatusL() == common.TraceStatusDone {
-			//	ltd.SetStatusL(common.TraceStatusSended)
 			if over == "1" {
 				//SendWrongRequestB(ltd, r.CompactorSetWrongUrl, b, "", nil)
 				SendWrongRequest(ltd, r.CompactorSetWrongUrl, "", nil)
-				r.logger.Info("query wrong in over",
-					zap.String("id", id),
-				)
+				//r.logger.Info("query wrong in over",
+				//	zap.String("id", id),
+				//)
 			} else {
-				r.lruCache.Remove(id)
+				//r.lruCache.Remove(id)
 				go func() {
 					//SendWrongRequestB(ltd, r.CompactorSetWrongUrl, b, "", nil)
 					SendWrongRequest(ltd, r.CompactorSetWrongUrl, "", nil)
 				}()
 			}
-			//}
 		}
 	}
+
+	//idb := common.StringToBytes(id)
+	//spanByte, err := r.freeCache.Get(idb)
+	//if err != nil {
+	//
+	//} else {
+	//	spans := bytes.Split(spanByte, []byte("\n"))
+	//	td := &common.TraceData{
+	//		Id:     id,
+	//		Source: r.HttpPort,
+	//		Sb:     spans,
+	//	}
+	//	if over == "1" {
+	//		SendWrongRequest(td, r.CompactorSetWrongUrl, "", nil)
+	//		r.logger.Info("query wrong in over",
+	//			zap.String("id", id),
+	//		)
+	//	} else {
+	//		r.freeCache.Del(idb)
+	//		go func() {
+	//			SendWrongRequest(td, r.CompactorSetWrongUrl, "", nil)
+	//		}()
+	//	}
+	//}
+
+	//spanBytei, ok := r.lruCache.Get(id)
+	//if ok {
+	//	spans := bytes.Split(spanBytei.([]byte), []byte("\n"))
+	//	td := &common.TraceData{
+	//		Id:     id,
+	//		Source: r.HttpPort,
+	//		Sb:     spans,
+	//	}
+	//	if over == "1" {
+	//		SendWrongRequest(td, r.CompactorSetWrongUrl, "", nil)
+	//		r.logger.Info("query wrong in over",
+	//			zap.String("id", id),
+	//		)
+	//	} else {
+	//		r.lruCache.Remove(id)
+	//		go func() {
+	//			SendWrongRequest(td, r.CompactorSetWrongUrl, "", nil)
+	//		}()
+	//	}
+	//}
+	//}
 	c.JSON(http.StatusOK, "")
 	return
 }
@@ -327,9 +372,6 @@ func (r *Receiver) ConsumeByte(lines [][]byte) {
 	idToSpans := make(map[string]*common.TraceData)
 	for _, line := range lines {
 		id := r.GetTraceIdFromByte(line)
-
-		//id := span.TraceId
-		//span.TraceId = ""
 		if etd, ok := idToSpans[id]; !ok {
 			//tdi := r.tdPool.Get()
 			//td := tdi.(*common.TraceData)
@@ -337,17 +379,13 @@ func (r *Receiver) ConsumeByte(lines [][]byte) {
 				//Sd:     []*common.SpanData{},
 				Source: r.HttpPort,
 				Sb:     [][]byte{},
+				Wrong:  r.IfSpanWrong(line),
+				Status: common.TraceStatusReady,
 			}
 			td.Id = id
 			td.Sb = append(td.Sb, line)
 			//td.Sd = append(td.Sd, span)
 			idToSpans[id] = td
-			//if !td.Wrong && span.Wrong {
-			//	td.Wrong = true
-			//}
-			if !td.Wrong && r.IfSpanWrong(line) {
-				td.Wrong = true
-			}
 		} else {
 			//if !etd.Wrong && span.Wrong {
 			//	etd.Wrong = true
@@ -361,25 +399,24 @@ func (r *Receiver) ConsumeByte(lines [][]byte) {
 	}
 
 	for id, etd := range idToSpans {
-		tdi, exist := r.idToTrace.LoadOrStore(id, etd)
+		exist, _ := r.lruCache.ContainsOrAdd(id, etd)
 		if exist {
 			// 已存在
-			td := tdi.(*common.TraceData)
-			td.AddSpan(etd.Sb)
-			if !td.Wrong && etd.Wrong {
-				// noti
-				td.Wrong = true
+			tdi, texist := r.lruCache.Get(id)
+			if !texist {
+				r.logger.Info("t not exist ", zap.String("id", id))
+			} else {
+				td := tdi.(*common.TraceData)
+				td.AddSpan(etd.Sb)
+				if !td.Wrong && etd.Wrong {
+					td.Wrong = true
+				}
 			}
+
 			//etd.Clear()
 			//r.tdPool.Put(etd)
 		} else {
-			//if etd.Wrong {
-			//	// notify
-			//	mockTd := &common.TraceData{Id: id, Source: r.HttpPort, Status: common.TraceStatusInit}
-			//	go SendWrongRequest(mockTd, r.CompactorSetWrongUrl, "", nil)
-			//}
-			//etd.SetStatusL(common.TraceStatusReady)
-			// 淘汰一个
+			//r.lruCache.Add(id, etd)
 			postDeletion := false
 			for !postDeletion {
 				select {
@@ -400,9 +437,9 @@ func (r *Receiver) ConsumeByte(lines [][]byte) {
 func (r *Receiver) dropTrace(id string, over string) {
 	atomic.AddInt64(&r.traceNums, 1)
 
-	d, ok := r.idToTrace.Load(id)
+	d, ok := r.lruCache.Get(id)
 	if !ok {
-		r.logger.Error("drop id not exist", zap.String("id", id))
+		r.logger.Info("drop id not exist", zap.String("id", id))
 		return
 	}
 	td := d.(*common.TraceData)
@@ -420,12 +457,17 @@ func (r *Receiver) dropTrace(id string, over string) {
 			wrong = true
 		}
 	}
-	r.idToTrace.Delete(id)
-	if wrong {
+	if wrong && td.Status != common.TraceStatusSended {
+		td.Status = common.TraceStatusSended
+		//r.lruCache.Remove(id)
 		go SendWrongRequest(td, r.CompactorSetWrongUrl, over, &r.overWg)
 		return
+	} else {
+		td.Status = common.TraceStatusDone
 	}
-	r.lruCache.Add(id, td)
+	//r.freeCache.Set(common.StringToBytes(id), bytes.Join(td.Sb, []byte("\n")), 10)
+	//r.lruCache.Add(id, bytes.Join(td.Sb, []byte("\n")))
+	//r.lruCache.Add(id, td)
 }
 
 func (r *Receiver) finish() {
