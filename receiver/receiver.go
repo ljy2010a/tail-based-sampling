@@ -158,7 +158,7 @@ func (r *Receiver) Run() {
 	}
 
 	//r.freeCache = freecache.NewCache(18_0000)
-	r.deleteChan = make(chan string, 3000)
+	r.deleteChan = make(chan string, 4000)
 	r.finishChan = make(chan interface{})
 	doneFunc := func() {
 		r.lruCache.Resize(15_0000)
