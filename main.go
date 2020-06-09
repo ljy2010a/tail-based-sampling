@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"github.com/ljy2010a/tailf-based-sampling/compactor"
 	"github.com/ljy2010a/tailf-based-sampling/receiver"
+	//_ "go.uber.org/automaxprocs"
 	"math/rand"
 	"runtime"
 	"time"
@@ -16,6 +17,7 @@ func main() {
 		time.Now().Format("2006-01-02 15:04:05"),
 		time.Now().Unix(),
 		runtime.NumCPU(),
+		runtime.GOMAXPROCS(-1),
 	)
 
 	rand.Seed(time.Now().Unix())
@@ -30,7 +32,7 @@ func main() {
 			CompactorSetWrongUrl: fmt.Sprintf("http://127.0.0.1:8002/sw"),
 			AutoDetect:           true,
 		}
-		runtime.GOMAXPROCS(2 * 16)
+		runtime.GOMAXPROCS(2 * 10)
 		receiver.Run()
 	} else if httpPort == "8002" {
 		compactor := compactor.Compactor{

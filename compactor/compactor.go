@@ -57,7 +57,7 @@ func (r *Compactor) Run() {
 		}
 	}()
 	go func() {
-		time.Sleep(30 * time.Second)
+		time.Sleep(5 * time.Second)
 		if r.DataPort != "" {
 			r.logger.Info("has dataport")
 			return
@@ -65,7 +65,7 @@ func (r *Compactor) Run() {
 		r.logger.Info("try to detect")
 
 		port := 8000
-		for i := 0; i < 1000; i++ {
+		for i := 0; i < 2000; i++ {
 			port++
 			dataUrl := fmt.Sprintf("http://127.0.0.1:%d/trace1.data", port)
 			resp, err := http.Get(dataUrl)

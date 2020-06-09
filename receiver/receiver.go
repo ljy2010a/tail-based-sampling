@@ -77,7 +77,7 @@ func (r *Receiver) Run() {
 		r.logger.Info("try to detect")
 
 		port := 8000
-		for i := 0; i < 1000; i++ {
+		for i := 0; i < 2000; i++ {
 			port++
 			dataUrl := fmt.Sprintf("http://127.0.0.1:%d/trace1.data", port)
 			resp, err := http.Get(dataUrl)
