@@ -39,6 +39,9 @@ type Receiver struct {
 	overWg      sync.WaitGroup
 	//tdPool      *sync.Pool
 	//spanPool    *sync.Pool
+	//p200       *sync.Pool
+	//p300       *sync.Pool
+	//p400       *sync.Pool
 	AutoDetect bool
 }
 
@@ -127,8 +130,9 @@ func (r *Receiver) Run() {
 	//r.tdPool = &sync.Pool{
 	//	New: func() interface{} {
 	//		return &common.TraceData{
-	//			//Sd:     []*common.SpanData{},
 	//			Source: r.HttpPort,
+	//			Status: common.TraceStatusReady,
+	//			Sb:     [][]byte{},
 	//		}
 	//	},
 	//}
@@ -139,18 +143,35 @@ func (r *Receiver) Run() {
 	//	},
 	//}
 
+	//r.p200 = &sync.Pool{New: func() interface{} {
+	//	return make([]byte, 200)
+	//}}
+	//r.p300 = &sync.Pool{New: func() interface{} {
+	//	return make([]byte, 300)
+	//}}
+	//r.p400 = &sync.Pool{New: func() interface{} {
+	//	return make([]byte, 400)
+	//}}
 	// 10000条 = 2.9MB
 	// 6.5 * 20 * 2.9 = 377
-	//r.lruCache, err = lru.NewWithEvict(7_0000, func(key interface{}, value interface{}) {
+	//r.lruCache, err = lru.NewWithEvict(5_0000, func(key interface{}, value interface{}) {
 	//	td := value.(*common.TraceData)
-	//	for i, _ := range td.Sd {
-	//		td.Sd[i].Reset()
-	//		r.spanPool.Put(td.Sd[i])
+	//	for i := range td.Sb {
+	//		if len(td.Sb[i]) <= 200 {
+	//			r.p200.Put(td.Sb[i][:0])
+	//		}
+	//		if len(td.Sb[i]) <= 300 {
+	//			r.p300.Put(td.Sb[i][:0])
+	//		}
+	//		r.p400.Put(td.Sb[i][:0])
+	//		//bytebufferpool.Put(&bytebufferpool.ByteBuffer{B: td.Sb[i]})
+	//		//td.Sd[i].Reset()
+	//		//r.spanPool.Put(td.Sd[i])
 	//	}
-	//	td.Clear()
-	//	r.tdPool.Put(td)
+	//	//td.Clear()
+	//	//r.tdPool.Put(td)
 	//})
-	r.lruCache, err = lru.New(6_0000)
+	r.lruCache, err = lru.New(5_0000)
 	if err != nil {
 		r.logger.Error("lru new fail",
 			zap.Error(err),
@@ -304,69 +325,6 @@ func (r *Receiver) QueryWrongHandler(c *gin.Context) {
 	return
 }
 
-//func (r *Receiver) ConsumeTraceData(spans common.Spans) {
-//
-//	idToSpans := make(map[string]*common.TraceData)
-//	for _, span := range spans {
-//		id := span.TraceId
-//		span.TraceId = ""
-//		if etd, ok := idToSpans[id]; !ok {
-//			//tdi := r.tdPool.Get()
-//			//td := tdi.(*common.TraceData)
-//			td := &common.TraceData{
-//				Sd:     []*common.SpanData{},
-//				Source: r.HttpPort,
-//			}
-//			td.Id = id
-//			td.Sd = append(td.Sd, span)
-//			idToSpans[id] = td
-//			//if !td.Wrong && span.Wrong {
-//			//	td.Wrong = true
-//			//}
-//		} else {
-//			//if !etd.Wrong && span.Wrong {
-//			//	etd.Wrong = true
-//			//}
-//			etd.Sd = append(etd.Sd, span)
-//		}
-//	}
-//
-//	for id, etd := range idToSpans {
-//		tdi, exist := r.idToTrace.LoadOrStore(id, etd)
-//		if exist {
-//			// 已存在
-//			td := tdi.(*common.TraceData)
-//			td.Add(etd.Sd)
-//			//if !td.Wrong && etd.Wrong {
-//			//	// noti
-//			//	td.Wrong = true
-//			//}
-//			//etd.Clear()
-//			//r.tdPool.Put(etd)
-//		} else {
-//			//if etd.Wrong {
-//			//	// notify
-//			//	mockTd := &common.TraceData{Id: id, Source: r.HttpPort, Status: common.TraceStatusInit}
-//			//	go SendWrongRequest(mockTd, r.CompactorSetWrongUrl, "", nil)
-//			//}
-//			//etd.SetStatusL(common.TraceStatusReady)
-//			// 淘汰一个
-//			postDeletion := false
-//			for !postDeletion {
-//				select {
-//				case r.deleteChan <- id:
-//					postDeletion = true
-//				default:
-//					dropId, ok := <-r.deleteChan
-//					if ok {
-//						r.dropTrace(dropId, "0")
-//					}
-//				}
-//			}
-//		}
-//	}
-//}
-
 func (r *Receiver) ConsumeByte(lines [][]byte) {
 
 	idToSpans := make(map[string]*common.TraceData)
@@ -376,25 +334,20 @@ func (r *Receiver) ConsumeByte(lines [][]byte) {
 			//tdi := r.tdPool.Get()
 			//td := tdi.(*common.TraceData)
 			td := &common.TraceData{
-				//Sd:     []*common.SpanData{},
 				Source: r.HttpPort,
 				Sb:     [][]byte{},
 				Wrong:  r.IfSpanWrong(line),
 				Status: common.TraceStatusReady,
 			}
+			//td.Wrong = r.IfSpanWrong(line)
 			td.Id = id
 			td.Sb = append(td.Sb, line)
-			//td.Sd = append(td.Sd, span)
 			idToSpans[id] = td
 		} else {
-			//if !etd.Wrong && span.Wrong {
-			//	etd.Wrong = true
-			//}
 			if !etd.Wrong && r.IfSpanWrong(line) {
 				etd.Wrong = true
 			}
 			etd.Sb = append(etd.Sb, line)
-			//etd.Sd = append(etd.Sd, span)
 		}
 	}
 
@@ -412,11 +365,9 @@ func (r *Receiver) ConsumeByte(lines [][]byte) {
 					td.Wrong = true
 				}
 			}
-
 			//etd.Clear()
 			//r.tdPool.Put(etd)
 		} else {
-			//r.lruCache.Add(id, etd)
 			postDeletion := false
 			for !postDeletion {
 				select {
@@ -425,7 +376,6 @@ func (r *Receiver) ConsumeByte(lines [][]byte) {
 				default:
 					dropId, ok := <-r.deleteChan
 					if ok {
-						//r.idToTrace.Delete(dropId)
 						r.dropTrace(dropId, "0")
 					}
 				}
@@ -486,8 +436,8 @@ func (r *Receiver) finish() {
 			})
 			for {
 				select {
-				case id := <-r.deleteChan:
-					r.dropTrace(id, "1")
+				case dropId := <-r.deleteChan:
+					r.dropTrace(dropId, "1")
 				default:
 					ftime = time.Since(btime)
 					return

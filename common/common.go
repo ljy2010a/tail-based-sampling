@@ -7,13 +7,13 @@ const (
 	TraceStatusDone   = 3
 )
 
-//func (m *TraceData) Clear() {
-//	m.Sd = m.Sd[:0]
-//	m.Id = ""
-//	m.Md5 = ""
-//	m.Status = TraceStatusInit
-//	m.Wrong = false
-//}
+func (m *TraceData) Clear() {
+	m.Sb = m.Sb[:0]
+	m.Id = ""
+	m.Md5 = ""
+	m.Status = TraceStatusReady
+	m.Wrong = false
+}
 //
 //func (m *TraceData) Add(newTd []*SpanData) {
 //	m.Lock()

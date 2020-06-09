@@ -76,11 +76,21 @@ func (c *ChannelGroupConsume) Read(rd io.Reader) {
 		//	minLine = lLen
 		//}
 		total++
+		//bb := bytebufferpool.Get()
+		//bb.Write(line)
+		//lines[i] = bb.Bytes()
+		//var nline []byte
+		//if lLen <= 200 {
+		//	nline = c.receiver.p200.Get().([]byte)
+		//}
+		//if lLen <= 300 {
+		//	nline = c.receiver.p300.Get().([]byte)
+		//} else {
+		//	nline = c.receiver.p400.Get().([]byte)
+		//}
 		nline := make([]byte, len(line))
 		copy(nline, line)
-		if i < c.lineGroupNum {
-			lines[i] = nline
-		}
+		lines[i] = nline
 		if i == c.lineGroupNum-1 {
 			c.lineChan <- lines
 			lines = make([][]byte, c.lineGroupNum)

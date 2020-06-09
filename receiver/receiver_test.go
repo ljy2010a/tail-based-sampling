@@ -2,11 +2,9 @@ package receiver
 
 import (
 	"fmt"
-	"github.com/ljy2010a/tailf-based-sampling/common"
 	"math/rand"
 	"testing"
 	"time"
-	"unsafe"
 )
 
 var (
@@ -31,28 +29,53 @@ func init() {
 func Benchmark_ConsumeTraceData(b *testing.B) {
 	// total = 11375660
 	// batch = 11375660/500 = 2.2w
-	batch := 25 //rand.Intn(25)
-	nums := 20  //rand.Intn(25)
-	spans := make([]*common.SpanData, nums*batch)
+	batch := 250 //rand.Intn(25)
+	nums := 20   //rand.Intn(25)
+
+	//spans := make([]*common.SpanData, nums*batch)
+	spans := make([][]byte, nums*batch)
+	s := []byte("|")
+	startTime := []byte(fmt.Sprintf("%d", time.Now().UnixNano()))
+	tag := []byte("|3d1e7e1147c1895d|1d37a8b17db8568b|1259|InventoryCenter|/api/traces|192.168.0.2|http.status_code=200&http.url=http://tracing.console.aliyun.com/getOrder&component=java-web-servlet&span.kind=server&http.method=GET")
 	for i := 0; i < b.N; i++ {
 		b.StopTimer()
 		for i := 0; i < batch; i++ {
 			id := RandStringBytesMaskImprSrc(16)
-			startTime := fmt.Sprintf("%d", time.Now().UnixNano())
 			for j := 0; j < nums; j++ {
-				span := &common.SpanData{
-					TraceId:   id,
-					StartTime: startTime,
-					Tags:      []byte("1d37a8b17db8568b|1589285985482007|3d1e7e1147c1895d|1d37a8b17db8568b|1259|InventoryCenter|/api/traces|192.168.0.2|http.status_code=200&http.url=http://tracing.console.aliyun.com/getOrder&component=java-web-servlet&span.kind=server&http.method=GET"),
-					Wrong:     false,
-				}
+				//bb := bytebufferpool.Get()
+				//bb.Write(id)
+				//b := rr.p300.Get().([]byte)
+				b := make([]byte, 300)
+				idx := 0
+				copy(b[idx:], id)
+				idx += len(id)
+				copy(b[idx:], s)
+				idx += len(s)
+				copy(b[idx:], startTime)
+				idx += len(startTime)
+				copy(b[idx:], tag)
+				//bb := bytes.NewBuffer(b)
+				//bb.Write(id)
+				//bb.WriteString("|")
+				//bb.Write(startTime)
+				//bb.Write(tag)
+
+				//span := &common.SpanData{
+				//	TraceId:   id,
+				//	StartTime: startTime,
+				//	Tags:      []byte("1d37a8b17db8568b|1589285985482007|3d1e7e1147c1895d|1d37a8b17db8568b|1259|InventoryCenter|/api/traces|192.168.0.2|http.status_code=200&http.url=http://tracing.console.aliyun.com/getOrder&component=java-web-servlet&span.kind=server&http.method=GET"),
+				//	Wrong:     false,
+				//}
 				//spani := rr.spanPool.Get()
 				//span := spani.(*common.SpanData)
 				//span.TraceId = id
 				//span.StartTime = startTime
 				//span.Tags = "1d37a8b17db8568b|1589285985482007|3d1e7e1147c1895d|1d37a8b17db8568b|1259|InventoryCenter|/api/traces|192.168.0.2|http.status_code=200&http.url=http://tracing.console.aliyun.com/getOrder&component=java-web-servlet&span.kind=server&http.method=GET"
 				//span.Wrong = false
-				spans[i*nums+j] = span
+				//fmt.Printf("%s\n",bb.Bytes())
+				//spans[i*nums+j] = bb.Bytes()
+				//fmt.Printf("%s\n", b)
+				spans[i*nums+j] = b
 			}
 		}
 		for i := range spans {
@@ -60,7 +83,7 @@ func Benchmark_ConsumeTraceData(b *testing.B) {
 			spans[i], spans[j] = spans[j], spans[i]
 		}
 		b.StartTimer()
-		rr.ConsumeTraceData(spans)
+		rr.ConsumeByte(spans)
 	}
 }
 
@@ -71,7 +94,7 @@ const (
 
 var src = rand.NewSource(time.Now().UnixNano())
 
-func RandStringBytesMaskImprSrc(n int) string {
+func RandStringBytesMaskImprSrc(n int) []byte {
 	b := make([]byte, n)
 	// A src.Int63() generates 63 random bits, enough for 10 characters!
 	for i, cache, remain := n-1, src.Int63(), 10; i >= 0; {
@@ -83,5 +106,5 @@ func RandStringBytesMaskImprSrc(n int) string {
 		cache >>= 6
 		remain--
 	}
-	return *(*string)(unsafe.Pointer(&b))
+	return b
 }
