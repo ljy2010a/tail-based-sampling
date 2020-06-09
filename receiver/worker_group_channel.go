@@ -2,7 +2,6 @@ package receiver
 
 import (
 	"bufio"
-	"fmt"
 	"go.uber.org/zap"
 	"io"
 	"sync"
@@ -30,7 +29,7 @@ func NewChannelGroupConsume(receiver *Receiver, readDone func(), over func()) *C
 	return &ChannelGroupConsume{
 		receiver:     receiver,
 		logger:       receiver.logger,
-		lineChan:     make(chan [][]byte, 1300),
+		lineChan:     make(chan [][]byte, 1400),
 		lineGroupNum: 5000,
 		//groupNum:     5000,
 		readBufSize:  16 * 1024,
@@ -42,12 +41,12 @@ func NewChannelGroupConsume(receiver *Receiver, readDone func(), over func()) *C
 
 func (c *ChannelGroupConsume) Read(rd io.Reader) {
 	c.logger.Info("read start")
-	defer func() {
-		err := recover()
-		if err != nil {
-			c.logger.Error("", zap.String("err", fmt.Sprintf("%v", err)))
-		}
-	}()
+	//defer func() {
+	//	err := recover()
+	//	if err != nil {
+	//		c.logger.Error("", zap.String("err", fmt.Sprintf("%v", err)))
+	//	}
+	//}()
 	btime := time.Now()
 	br := bufio.NewReaderSize(rd, c.readBufSize)
 	size := 0
@@ -67,7 +66,7 @@ func (c *ChannelGroupConsume) Read(rd io.Reader) {
 		if err == io.EOF {
 			break
 		}
-		size += len(line)
+		//size += len(line)
 		//lLen := len(line)
 		//if maxLine < lLen {
 		//	maxLine = lLen
@@ -75,7 +74,7 @@ func (c *ChannelGroupConsume) Read(rd io.Reader) {
 		//if minLine > lLen || minLine == 0 {
 		//	minLine = lLen
 		//}
-		total++
+		//total++
 		//bb := bytebufferpool.Get()
 		//bb.Write(line)
 		//lines[i] = bb.Bytes()
@@ -127,12 +126,12 @@ func (c *ChannelGroupConsume) StartConsume() {
 }
 
 func (c *ChannelGroupConsume) consume() {
-	defer func() {
-		err := recover()
-		if err != nil {
-			c.logger.Error("", zap.String("err", fmt.Sprintf("%v", err)))
-		}
-	}()
+	//defer func() {
+	//	err := recover()
+	//	if err != nil {
+	//		c.logger.Error("", zap.String("err", fmt.Sprintf("%v", err)))
+	//	}
+	//}()
 	c.doneWg.Add(1)
 	defer c.doneWg.Done()
 
@@ -148,12 +147,12 @@ func (c *ChannelGroupConsume) consume() {
 	//	)
 	//	time.Sleep(10 * time.Second)
 	//}()
-	once := sync.Once{}
+	//once := sync.Once{}
 	for lines := range c.lineChan {
-		once.Do(func() {
-			btime = time.Now()
-		})
-		size += len(lines)
+		//once.Do(func() {
+		//	btime = time.Now()
+		//})
+		//size += len(lines)
 		c.receiver.ConsumeByte(lines)
 		//for _, line := range lines {
 		//	size++

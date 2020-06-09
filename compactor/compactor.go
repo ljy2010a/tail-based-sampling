@@ -31,12 +31,12 @@ type Compactor struct {
 }
 
 func (r *Compactor) Run() {
-	defer func() {
-		err := recover()
-		if err != nil {
-			fmt.Println(err)
-		}
-	}()
+	//defer func() {
+	//	err := recover()
+	//	if err != nil {
+	//		fmt.Println(err)
+	//	}
+	//}()
 	r.logger, _ = zap.NewProduction()
 	defer r.logger.Sync()
 	go func() {
@@ -126,12 +126,6 @@ func (r *Compactor) SetParamHandler(c *gin.Context) {
 func (r *Compactor) SetWrongHandler(c *gin.Context) {
 	over := c.DefaultQuery("over", "0")
 	td := &common.TraceData{}
-	//err := c.BindJSON(&td)
-	//if err != nil {
-	//	c.AbortWithStatus(http.StatusBadRequest)
-	//	return
-	//}
-
 	body, err := c.GetRawData()
 	if err != nil {
 		r.logger.Info("td get body fail", zap.Error(err))
@@ -158,12 +152,6 @@ func (r *Compactor) SetWrongHandler(c *gin.Context) {
 		NotifyAnotherWrong(reportUrl)
 	} else {
 		otd := tdi.(*common.TraceData)
-
-		//if td.GetStatusL() == common.TraceStatusInit {
-		//	r.logger.Info("td already exist ", zap.String("id", otd.Id))
-		//	c.AbortWithStatus(http.StatusOK)
-		//	return
-		//}
 		if otd.Md5 != "" {
 			r.logger.Info("md5 already exist ", zap.String("id", otd.Id))
 			c.AbortWithStatus(http.StatusOK)
@@ -174,21 +162,8 @@ func (r *Compactor) SetWrongHandler(c *gin.Context) {
 			c.AbortWithStatus(http.StatusOK)
 			return
 		}
-		//otd.Add(td.Sd)
 		otd.AddSpan(td.Sb)
 		otd.Md5 = CompactMd5(otd)
-
-		//times := atomic.AddInt64(&otd.Status, 1)
-		//if times == 1 {
-		//	otd.Add(td.Sd)
-		//} else if times == 2 {
-		//	otd.Add(td.Sd)
-		//	otd.Md5 = CompactMd5(otd)
-		//} else {
-		//	r.logger.Info("request more 2 ",
-		//		zap.String("id", otd.Id),
-		//	)
-		//}
 	}
 	c.AbortWithStatus(http.StatusOK)
 	return
@@ -258,7 +233,6 @@ func (r *Compactor) finish() {
 }
 
 func CompactMd5(td *common.TraceData) string {
-	//sort.Sort(td.Sb)
 	spans := common.Spans{}
 	for _, sb := range td.Sb {
 		spans = append(spans, ParseSpanData(sb))

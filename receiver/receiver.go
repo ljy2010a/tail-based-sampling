@@ -10,7 +10,6 @@ import (
 	"net/http"
 	"os"
 	"sync"
-	"sync/atomic"
 	"time"
 )
 
@@ -171,7 +170,7 @@ func (r *Receiver) Run() {
 	//	//td.Clear()
 	//	//r.tdPool.Put(td)
 	//})
-	r.lruCache, err = lru.New(5_0000)
+	r.lruCache, err = lru.New(6_0000)
 	if err != nil {
 		r.logger.Error("lru new fail",
 			zap.Error(err),
@@ -385,7 +384,7 @@ func (r *Receiver) ConsumeByte(lines [][]byte) {
 }
 
 func (r *Receiver) dropTrace(id string, over string) {
-	atomic.AddInt64(&r.traceNums, 1)
+	//atomic.AddInt64(&r.traceNums, 1)
 
 	d, ok := r.lruCache.Get(id)
 	if !ok {
