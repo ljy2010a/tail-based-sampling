@@ -32,7 +32,7 @@ func NewChannelGroupConsume(receiver *Receiver, readDone func(), over func()) *C
 		lineChan:     make(chan [][]byte, 500),
 		lineGroupNum: 5000,
 		//groupNum:     5000,
-		readBufSize:  1024 * 1024 * 1024,
+		readBufSize:  256 * 1024 * 1024,
 		workNum:      2,
 		readDoneFunc: readDone,
 		overFunc:     over,
@@ -64,15 +64,16 @@ func (c *ChannelGroupConsume) Read(rd io.Reader) {
 	minLine := 0
 	i := 0
 	lines := make([][]byte, c.lineGroupNum)
-	//lineBlock := make([]byte, 512*1024*1024)
-	//pos := 0
+	blockLen := 1024 * 1024 * 1024
+	lineBlock := make([]byte, blockLen)
+	pos := 0
 	for {
 		line, _, err := br.ReadLine()
 		if err == io.EOF {
 			break
 		}
 		//size += len(line)
-		//lLen := len(line)
+		lLen := len(line)
 		//if maxLine < lLen {
 		//	maxLine = lLen
 		//}
@@ -92,15 +93,18 @@ func (c *ChannelGroupConsume) Read(rd io.Reader) {
 		//} else {
 		//	nline = c.receiver.p400.Get().([]byte)
 		//}
-		nline := make([]byte, len(line))
-		copy(nline, line)
-		lines[i] = nline
+		//nline := make([]byte, len(line))
+		//copy(nline, line)
+		//lines[i] = nline
 
 		//lines[i] = line
 
-		//copy(lineBlock[pos:], line)
-		//lines[i] = lineBlock[pos : pos+lLen]
-		//pos += lLen
+		if pos+lLen > blockLen {
+			pos = 0
+		}
+		copy(lineBlock[pos:], line)
+		lines[i] = lineBlock[pos : pos+lLen]
+		pos += lLen
 		if i == c.lineGroupNum-1 {
 			c.lineChan <- lines
 			lines = make([][]byte, c.lineGroupNum)
