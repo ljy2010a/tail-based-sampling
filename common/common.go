@@ -1,10 +1,9 @@
 package common
 
 const (
-	//TraceStatusInit   = 0
+	TraceStatusReady  = 0
 	TraceStatusSended = 1
-	TraceStatusReady  = 2
-	TraceStatusDone   = 3
+	TraceStatusDone   = 2
 )
 
 func (m *TraceData) Clear() {
@@ -14,19 +13,32 @@ func (m *TraceData) Clear() {
 	m.Status = TraceStatusReady
 	m.Wrong = false
 }
-//
-//func (m *TraceData) Add(newTd []*SpanData) {
-//	m.Lock()
-//	m.Sd = append(m.Sd, newTd...)
-//	m.Unlock()
-//}
 
-func (m *TraceData) AddSpan(newTd [][]byte) {
+func (m *TraceData) AddSpan(newSpans [][]byte) {
 	m.Lock()
-	m.Sb = append(m.Sb, newTd...)
+	m.Sb = append(m.Sb, newSpans...)
+	//for i := range newSpans {
+	//	if len(m.Sb) < m.Sbpos {
+	//		m.Sb[m.Sbpos] = newSpans[i]
+	//	} else {
+	//		m.Sb = append(m.Sb, newSpans[i])
+	//	}
+	//	m.Sbpos += 1
+	//}
 	m.Unlock()
 }
 
+func (m *TraceData) AddOne(newSpan []byte) {
+	m.Lock()
+	m.Sb = append(m.Sb, newSpan)
+	//if len(m.Sb) < m.Sbpos {
+	//	m.Sb[m.Sbpos] = newSpan
+	//} else {
+	//	m.Sb = append(m.Sb, newSpan)
+	//}
+	//m.Sbpos += 1
+	m.Unlock()
+}
 
 // traceId：全局唯一的Id，用作整个链路的唯一标识与组装
 //startTime：调用的开始时间

@@ -33,8 +33,8 @@ func NewChannelGroupConsume(receiver *Receiver, readDone func(), over func()) *C
 	return &ChannelGroupConsume{
 		receiver:     receiver,
 		logger:       receiver.logger,
-		lineChan:     make(chan [][]byte, 1000),
-		lineGroupNum: 5000,
+		lineChan:     make(chan [][]byte, 100),
+		lineGroupNum: 20000,
 		readBufSize:  readBufSize,
 		workNum:      2,
 		readDoneFunc: readDone,

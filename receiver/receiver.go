@@ -10,6 +10,7 @@ import (
 	"net/http"
 	"os"
 	"runtime"
+	"strings"
 	"sync"
 	"time"
 )
@@ -30,7 +31,6 @@ type Receiver struct {
 
 	wrongIdMap sync.Map
 	lruCache   *lru.Cache
-	//freeCache *freecache.Cache
 	//consumer   *ChannelConsume
 	consumer    *ChannelGroupConsume
 	traceNums   int64
@@ -104,7 +104,6 @@ func (r *Receiver) Run() {
 			}
 		}
 	}()
-
 	go func() {
 		for {
 			b2Mb := func(b uint64) uint64 {
@@ -159,8 +158,7 @@ func (r *Receiver) Run() {
 		)
 	}
 
-	//r.freeCache = freecache.NewCache(18_0000)
-	r.deleteChan = make(chan string, 4000)
+	r.deleteChan = make(chan string, 8000)
 	r.finishChan = make(chan interface{})
 	doneFunc := func() {
 		//r.lruCache.Resize(15_0000)
@@ -257,30 +255,6 @@ func (r *Receiver) QueryWrongHandler(c *gin.Context) {
 		}
 	}
 
-	//idb := common.StringToBytes(id)
-	//spanByte, err := r.freeCache.Get(idb)
-	//if err != nil {
-	//
-	//} else {
-	//	spans := bytes.Split(spanByte, []byte("\n"))
-	//	td := &common.TraceData{
-	//		Id:     id,
-	//		Source: r.HttpPort,
-	//		Sb:     spans,
-	//	}
-	//	if over == "1" {
-	//		SendWrongRequest(td, r.CompactorSetWrongUrl, "", nil)
-	//		r.logger.Info("query wrong in over",
-	//			zap.String("id", id),
-	//		)
-	//	} else {
-	//		r.freeCache.Del(idb)
-	//		go func() {
-	//			SendWrongRequest(td, r.CompactorSetWrongUrl, "", nil)
-	//		}()
-	//	}
-	//}
-
 	//spanBytei, ok := r.lruCache.Get(id)
 	//if ok {
 	//	spans := bytes.Split(spanBytei.([]byte), []byte("\n"))
@@ -307,27 +281,29 @@ func (r *Receiver) QueryWrongHandler(c *gin.Context) {
 }
 
 func (r *Receiver) ConsumeByte(lines [][]byte) {
-
 	idToSpans := make(map[string]*common.TraceData)
-	for _, line := range lines {
-		id := r.GetTraceIdFromByte(line)
+	for i := range lines {
+		line := lines[i]
+		id := GetTraceIdFromByte(line)
 		if etd, ok := idToSpans[id]; !ok {
 			//tdi := r.tdPool.Get()
 			//td := tdi.(*common.TraceData)
+			//td.Wrong = r.IfSpanWrong(line)
 			td := &common.TraceData{
 				Source: r.HttpPort,
 				Sb:     [][]byte{},
-				Wrong:  r.IfSpanWrong(line),
-				Status: common.TraceStatusReady,
+				Wrong:  IfSpanWrong(line),
+				//Status: common.TraceStatusReady,
 			}
-			//td.Wrong = r.IfSpanWrong(line)
 			td.Id = id
+			//td.AddOne(line)
 			td.Sb = append(td.Sb, line)
 			idToSpans[id] = td
 		} else {
-			if !etd.Wrong && r.IfSpanWrong(line) {
+			if !etd.Wrong && IfSpanWrong(line) {
 				etd.Wrong = true
 			}
+			//etd.AddOne(line)
 			etd.Sb = append(etd.Sb, line)
 		}
 	}
@@ -355,6 +331,7 @@ func (r *Receiver) ConsumeByte(lines [][]byte) {
 				case r.deleteChan <- id:
 					postDeletion = true
 				default:
+					//<-r.deleteChan
 					dropId, ok := <-r.deleteChan
 					if ok {
 						r.dropTrace(dropId, "0")
@@ -395,8 +372,6 @@ func (r *Receiver) dropTrace(id string, over string) {
 	} else {
 		td.Status = common.TraceStatusDone
 	}
-	//r.freeCache.Set(common.StringToBytes(id), bytes.Join(td.Sb, []byte("\n")), 10)
-	//r.lruCache.Add(id, bytes.Join(td.Sb, []byte("\n")))
 	//r.lruCache.Add(id, td)
 }
 
@@ -461,12 +436,58 @@ var (
 	S1       = []byte("|")
 )
 
-func (r *Receiver) GetTraceIdFromByte(line []byte) string {
-	firstIdx := bytes.Index(line, S1)
+func GetTraceIdWrongFromString(line []byte) (string, bool) {
+	l := common.BytesToString(line)
+	id := l[:strings.Index(l, "|")]
+	if strings.Contains(l, "error=1") {
+		return id, true
+	}
+
+	pos := strings.Index(l, "http.status_code=")
+	if pos == -1 {
+		return id, false
+	}
+	if l[pos+17:pos+20] != "200" {
+		return id, true
+	}
+	return id, false
+}
+
+func GetTraceIdWrongFromByte(line []byte) (string, bool) {
+	l := common.BytesToString(line)
+	id := l[:strings.IndexByte(l, '|')]
+	if bytes.Contains(line, Ferr1) {
+		return id, true
+	}
+	if bytes.Contains(line, FCode) && !bytes.Contains(line, FCode200) {
+		return id, true
+	}
+	return id, false
+}
+
+func GetTraceIdFromByte(line []byte) string {
+	firstIdx := bytes.IndexByte(line, '|')
 	return common.BytesToString(line[:firstIdx])
 }
 
-func (r *Receiver) IfSpanWrong(line []byte) bool {
+func IfSpanWrong(line []byte) bool {
+	//l := common.BytesToString(line)
+	//if strings.Contains(l, "error=1") {
+	//	return true
+	//}
+	//pos := strings.Index(l, "http.status_code=")
+	//if pos == -1 {
+	//	return false
+	//}
+	//if l[pos:pos+3] != "200" {
+	//	return true
+	//}
+	//return false
+
+	//if strings.Contains(l, "http.status_code=") && !strings.Contains(l, "http.status_code=200") {
+	//	return true
+	//}
+
 	if bytes.Contains(line, Ferr1) {
 		return true
 	}
@@ -474,26 +495,4 @@ func (r *Receiver) IfSpanWrong(line []byte) bool {
 		return true
 	}
 	return false
-}
-
-func (r *Receiver) ParseSpanData(line []byte) *common.SpanData {
-	//spanDatai := r.spanPool.Get()
-	//spanData := spanDatai.(*common.SpanData)
-	spanData := &common.SpanData{}
-	firstIdx := bytes.Index(line, S1)
-	spanData.TraceId = common.BytesToString(line[:firstIdx])
-
-	secondIdx := bytes.Index(line[firstIdx+1:], S1)
-	spanData.StartTime = common.BytesToString(line[firstIdx+1 : firstIdx+1+secondIdx])
-
-	spanData.Tags = line
-
-	if bytes.Contains(line, Ferr1) {
-		spanData.Wrong = true
-		return spanData
-	}
-	if bytes.Contains(line, FCode) && !bytes.Contains(line, FCode200) {
-		spanData.Wrong = true
-	}
-	return spanData
 }
