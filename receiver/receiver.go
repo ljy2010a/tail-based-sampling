@@ -9,6 +9,7 @@ import (
 	"go.uber.org/zap"
 	"net/http"
 	"os"
+	"runtime"
 	"sync"
 	"time"
 )
@@ -107,25 +108,25 @@ func (r *Receiver) Run() {
 		}
 	}()
 
-	//go func() {
-	//	for {
-	//		time.Sleep(2 * time.Second)
-	//		b2Mb := func(b uint64) uint64 {
-	//			return b / 1024 / 1024
-	//		}
-	//		var m runtime.MemStats
-	//		runtime.ReadMemStats(&m)
-	//
-	//		r.logger.Info("MEM STAT",
-	//			zap.Uint64("Alloc", b2Mb(m.Alloc)),
-	//			zap.Uint64("TotalAlloc", b2Mb(m.TotalAlloc)),
-	//			zap.Uint64("HeapInuse", b2Mb(m.HeapInuse)),
-	//			zap.Uint64("HeapAlloc", b2Mb(m.HeapAlloc)),
-	//			zap.Uint64("Sys", b2Mb(m.Sys)),
-	//			zap.Uint32("NumGC", m.NumGC),
-	//		)
-	//	}
-	//}()
+	go func() {
+		for {
+			b2Mb := func(b uint64) uint64 {
+				return b / 1024 / 1024
+			}
+			var m runtime.MemStats
+			runtime.ReadMemStats(&m)
+
+			r.logger.Info("MEM STAT",
+				zap.Uint64("Alloc", b2Mb(m.Alloc)),
+				zap.Uint64("TotalAlloc", b2Mb(m.TotalAlloc)),
+				zap.Uint64("HeapInuse", b2Mb(m.HeapInuse)),
+				zap.Uint64("HeapAlloc", b2Mb(m.HeapAlloc)),
+				zap.Uint64("Sys", b2Mb(m.Sys)),
+				zap.Uint32("NumGC", m.NumGC),
+			)
+			time.Sleep(1 * time.Second)
+		}
+	}()
 	//r.tdPool = &sync.Pool{
 	//	New: func() interface{} {
 	//		return &common.TraceData{

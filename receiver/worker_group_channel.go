@@ -29,10 +29,10 @@ func NewChannelGroupConsume(receiver *Receiver, readDone func(), over func()) *C
 	return &ChannelGroupConsume{
 		receiver:     receiver,
 		logger:       receiver.logger,
-		lineChan:     make(chan [][]byte, 1400),
+		lineChan:     make(chan [][]byte, 500),
 		lineGroupNum: 5000,
 		//groupNum:     5000,
-		readBufSize:  16 * 1024,
+		readBufSize:  1024 * 1024 * 1024,
 		workNum:      2,
 		readDoneFunc: readDone,
 		overFunc:     over,
@@ -49,6 +49,9 @@ func (c *ChannelGroupConsume) Read(rd io.Reader) {
 	//}()
 	btime := time.Now()
 	br := bufio.NewReaderSize(rd, c.readBufSize)
+	//sc := bufio.NewScanner(rd)
+	//sc.Split(bufio.ScanLines)
+	//sc.Bytes()
 	size := 0
 	total := 0
 	//go func() {
@@ -61,6 +64,8 @@ func (c *ChannelGroupConsume) Read(rd io.Reader) {
 	minLine := 0
 	i := 0
 	lines := make([][]byte, c.lineGroupNum)
+	//lineBlock := make([]byte, 512*1024*1024)
+	//pos := 0
 	for {
 		line, _, err := br.ReadLine()
 		if err == io.EOF {
@@ -90,6 +95,12 @@ func (c *ChannelGroupConsume) Read(rd io.Reader) {
 		nline := make([]byte, len(line))
 		copy(nline, line)
 		lines[i] = nline
+
+		//lines[i] = line
+
+		//copy(lineBlock[pos:], line)
+		//lines[i] = lineBlock[pos : pos+lLen]
+		//pos += lLen
 		if i == c.lineGroupNum-1 {
 			c.lineChan <- lines
 			lines = make([][]byte, c.lineGroupNum)
