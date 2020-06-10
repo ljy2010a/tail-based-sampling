@@ -39,9 +39,6 @@ type Receiver struct {
 	overWg      sync.WaitGroup
 	//tdPool      *sync.Pool
 	//spanPool    *sync.Pool
-	//p200       *sync.Pool
-	//p300       *sync.Pool
-	//p400       *sync.Pool
 	AutoDetect bool
 }
 
@@ -143,27 +140,11 @@ func (r *Receiver) Run() {
 	//	},
 	//}
 
-	//r.p200 = &sync.Pool{New: func() interface{} {
-	//	return make([]byte, 200)
-	//}}
-	//r.p300 = &sync.Pool{New: func() interface{} {
-	//	return make([]byte, 300)
-	//}}
-	//r.p400 = &sync.Pool{New: func() interface{} {
-	//	return make([]byte, 400)
-	//}}
 	// 10000条 = 2.9MB
 	// 6.5 * 20 * 2.9 = 377
 	//r.lruCache, err = lru.NewWithEvict(5_0000, func(key interface{}, value interface{}) {
 	//	td := value.(*common.TraceData)
 	//	for i := range td.Sb {
-	//		if len(td.Sb[i]) <= 200 {
-	//			r.p200.Put(td.Sb[i][:0])
-	//		}
-	//		if len(td.Sb[i]) <= 300 {
-	//			r.p300.Put(td.Sb[i][:0])
-	//		}
-	//		r.p400.Put(td.Sb[i][:0])
 	//		//bytebufferpool.Put(&bytebufferpool.ByteBuffer{B: td.Sb[i]})
 	//		//td.Sd[i].Reset()
 	//		//r.spanPool.Put(td.Sd[i])
@@ -171,7 +152,7 @@ func (r *Receiver) Run() {
 	//	//td.Clear()
 	//	//r.tdPool.Put(td)
 	//})
-	r.lruCache, err = lru.New(6_0000)
+	r.lruCache, err = lru.New(15_0000)
 	if err != nil {
 		r.logger.Error("lru new fail",
 			zap.Error(err),
@@ -182,7 +163,7 @@ func (r *Receiver) Run() {
 	r.deleteChan = make(chan string, 4000)
 	r.finishChan = make(chan interface{})
 	doneFunc := func() {
-		r.lruCache.Resize(15_0000)
+		//r.lruCache.Resize(15_0000)
 	}
 	overFunc := func() {
 		close(r.finishChan)
@@ -409,7 +390,6 @@ func (r *Receiver) dropTrace(id string, over string) {
 	}
 	if wrong && td.Status != common.TraceStatusSended {
 		td.Status = common.TraceStatusSended
-		//r.lruCache.Remove(id)
 		go SendWrongRequest(td, r.CompactorSetWrongUrl, over, &r.overWg)
 		return
 	} else {

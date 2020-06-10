@@ -18,24 +18,30 @@ type ChannelGroupConsume struct {
 	overFunc     func()
 	doneOnce     sync.Once
 	doneWg       sync.WaitGroup
-	//groupNum     int
-	workNum int
+	workNum      int
+	blockLen     int
+	lineBlock    []byte
+	scannerBlock []byte
 }
 
 func NewChannelGroupConsume(receiver *Receiver, readDone func(), over func()) *ChannelGroupConsume {
 	// 300w = 10.67s , 13.15s
 	// 350w = 9.76s , 12.73s
 	// 500w = 1450MB , 6.98s , 9.52s  7.33 , 9.21
+	blockLen := int(1.5 * 1024 * 1024 * 1024)
+	readBufSize := 64 * 1024 * 1024
 	return &ChannelGroupConsume{
 		receiver:     receiver,
 		logger:       receiver.logger,
-		lineChan:     make(chan [][]byte, 500),
+		lineChan:     make(chan [][]byte, 1000),
 		lineGroupNum: 5000,
-		//groupNum:     5000,
-		readBufSize:  256 * 1024 * 1024,
+		readBufSize:  readBufSize,
 		workNum:      2,
 		readDoneFunc: readDone,
 		overFunc:     over,
+		blockLen:     blockLen,
+		lineBlock:    make([]byte, blockLen),
+		//scannerBlock: make([]byte, readBufSize),
 	}
 }
 
@@ -49,24 +55,35 @@ func (c *ChannelGroupConsume) Read(rd io.Reader) {
 	//}()
 	btime := time.Now()
 	br := bufio.NewReaderSize(rd, c.readBufSize)
-	//sc := bufio.NewScanner(rd)
-	//sc.Split(bufio.ScanLines)
-	//sc.Bytes()
+	//scanner := bufio.NewScanner(rd)
+	//scanner.Buffer(c.scannerBlock, c.readBufSize)
+	//scanner.Split(bufio.ScanLines)
 	size := 0
 	total := 0
-	//go func() {
-	//	c.logger.Info("read stat",
-	//		zap.Int("total", total),
-	//	)
-	//	time.Sleep(10 * time.Second)
-	//}()
 	maxLine := 0
 	minLine := 0
 	i := 0
-	lines := make([][]byte, c.lineGroupNum)
-	blockLen := 1024 * 1024 * 1024
-	lineBlock := make([]byte, blockLen)
 	pos := 0
+	lines := make([][]byte, c.lineGroupNum)
+
+	//for scanner.Scan() {
+	//	line := scanner.Bytes()
+	//	lLen := len(line)
+	//	if pos+lLen > c.blockLen {
+	//		pos = 0
+	//	}
+	//	copy(c.lineBlock[pos:], line)
+	//	lines[i] = c.lineBlock[pos : pos+lLen]
+	//	pos += lLen
+	//	if i == c.lineGroupNum-1 {
+	//		c.lineChan <- lines
+	//		lines = make([][]byte, c.lineGroupNum)
+	//		i = 0
+	//		continue
+	//	}
+	//	i++
+	//}
+
 	for {
 		line, _, err := br.ReadLine()
 		if err == io.EOF {
@@ -81,29 +98,17 @@ func (c *ChannelGroupConsume) Read(rd io.Reader) {
 		//	minLine = lLen
 		//}
 		//total++
-		//bb := bytebufferpool.Get()
-		//bb.Write(line)
-		//lines[i] = bb.Bytes()
-		//var nline []byte
-		//if lLen <= 200 {
-		//	nline = c.receiver.p200.Get().([]byte)
-		//}
-		//if lLen <= 300 {
-		//	nline = c.receiver.p300.Get().([]byte)
-		//} else {
-		//	nline = c.receiver.p400.Get().([]byte)
-		//}
 		//nline := make([]byte, len(line))
 		//copy(nline, line)
 		//lines[i] = nline
 
 		//lines[i] = line
 
-		if pos+lLen > blockLen {
+		if pos+lLen > c.blockLen {
 			pos = 0
 		}
-		copy(lineBlock[pos:], line)
-		lines[i] = lineBlock[pos : pos+lLen]
+		copy(c.lineBlock[pos:], line)
+		lines[i] = c.lineBlock[pos : pos+lLen]
 		pos += lLen
 		if i == c.lineGroupNum-1 {
 			c.lineChan <- lines
@@ -153,15 +158,6 @@ func (c *ChannelGroupConsume) consume() {
 	btime := time.Now()
 	size := 0
 	wrong := 0
-	//spanDatas := make([]*common.SpanData, c.groupNum)
-	//i := 0
-	//go func() {
-	//	c.logger.Info("read stat",
-	//		zap.Int("wrong", wrong),
-	//		zap.Int("size", size),
-	//	)
-	//	time.Sleep(10 * time.Second)
-	//}()
 	//once := sync.Once{}
 	for lines := range c.lineChan {
 		//once.Do(func() {
@@ -169,32 +165,7 @@ func (c *ChannelGroupConsume) consume() {
 		//})
 		//size += len(lines)
 		c.receiver.ConsumeByte(lines)
-		//for _, line := range lines {
-		//	size++
-		//	if len(line) < 60 {
-		//		continue
-		//	}
-		//	spanData := c.receiver.ParseSpanData(line)
-		//	if spanData == nil {
-		//		continue
-		//	}
-		//	if spanData.Wrong {
-		//		wrong++
-		//	}
-		//	if i < c.groupNum {
-		//		spanDatas[i] = spanData
-		//	}
-		//	if i == c.groupNum-1 {
-		//		c.receiver.ConsumeTraceData(spanDatas)
-		//		i = 0
-		//		continue
-		//	}
-		//	i++
-		//}
 	}
-	//if i != 0 {
-	//	c.receiver.ConsumeTraceData(spanDatas[:i])
-	//}
 	c.logger.Info("deal file done ",
 		zap.Int("wrong", wrong),
 		zap.Int("dealSize", size),

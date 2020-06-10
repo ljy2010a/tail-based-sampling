@@ -60,13 +60,17 @@ func main() {
 	for i := 0; i < 10; i++ {
 		a[i] = 1
 	}
-	fmt.Println(len(a),cap(a))
-	fmt.Printf("%p\n",a)
+	fmt.Println(len(a), cap(a))
+	fmt.Printf("%p\n", a)
 	a = a[:0]
-	fmt.Println(len(a),cap(a))
-	fmt.Printf("%p\n",a)
+	fmt.Println(len(a), cap(a))
+	fmt.Printf("%p\n", a)
 
-	a = append(a , 1)
-	fmt.Println(len(a),cap(a))
-	fmt.Printf("%p\n",a)
+	a = append(a, 1)
+	fmt.Println(len(a), cap(a))
+	fmt.Printf("%p\n", a)
+
+	b := a[1:3]
+	fmt.Println(len(b), cap(b))
+	fmt.Printf("%p\n", b)
 }

@@ -32,13 +32,13 @@ func main() {
 			CompactorSetWrongUrl: fmt.Sprintf("http://127.0.0.1:8002/sw"),
 			AutoDetect:           true,
 		}
-		runtime.GOMAXPROCS(2 * 10)
+		runtime.GOMAXPROCS(2 * 8)
 		receiver.Run()
 	} else if httpPort == "8002" {
 		compactor := compactor.Compactor{
 			HttpPort: httpPort,
 		}
-		runtime.GOMAXPROCS(1 * 16)
+		runtime.GOMAXPROCS(1 * 8)
 		compactor.Run()
 	}
 	fmt.Printf("port not macth [%v] \n", httpPort)
