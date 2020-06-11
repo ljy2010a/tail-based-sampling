@@ -12,6 +12,7 @@ import (
 	"runtime"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"time"
 )
 
@@ -40,6 +41,9 @@ type Receiver struct {
 	//tdPool      *sync.Pool
 	//spanPool    *sync.Pool
 	AutoDetect bool
+	mapMaxSize int
+	mapMinSize int
+	traceMiss  int
 }
 
 func (r *Receiver) Run() {
@@ -281,7 +285,7 @@ func (r *Receiver) QueryWrongHandler(c *gin.Context) {
 }
 
 func (r *Receiver) ConsumeByte(lines [][]byte) {
-	idToSpans := make(map[string]*common.TraceData, 500)
+	idToSpans := make(map[string]*common.TraceData, 800)
 	for i := range lines {
 		line := lines[i]
 		id := GetTraceIdFromByte(line)
@@ -308,9 +312,15 @@ func (r *Receiver) ConsumeByte(lines [][]byte) {
 		}
 	}
 
+	mapSize := len(idToSpans)
+	if mapSize > r.mapMaxSize {
+		r.mapMaxSize = mapSize
+	}
+
 	for id, etd := range idToSpans {
 		exist, _ := r.lruCache.ContainsOrAdd(id, etd)
 		if exist {
+			r.traceMiss++
 			// 已存在
 			tdi, texist := r.lruCache.Get(id)
 			if !texist {
@@ -343,7 +353,7 @@ func (r *Receiver) ConsumeByte(lines [][]byte) {
 }
 
 func (r *Receiver) dropTrace(id string, over string) {
-	//atomic.AddInt64(&r.traceNums, 1)
+	atomic.AddInt64(&r.traceNums, 1)
 
 	d, ok := r.lruCache.Get(id)
 	if !ok {
@@ -410,6 +420,8 @@ func (r *Receiver) finish() {
 		zap.Int64("traceNum", r.traceNums),
 		zap.Int("maxSpLen", r.maxSpanNums),
 		zap.Int("minSpanNums", r.minSpanNums),
+		zap.Int("mapMaxSize", r.mapMaxSize),
+		zap.Int("traceMiss", r.traceMiss),
 	)
 	r.notifyFIN()
 }
