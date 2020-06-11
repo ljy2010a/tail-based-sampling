@@ -281,7 +281,7 @@ func (r *Receiver) QueryWrongHandler(c *gin.Context) {
 }
 
 func (r *Receiver) ConsumeByte(lines [][]byte) {
-	idToSpans := make(map[string]*common.TraceData)
+	idToSpans := make(map[string]*common.TraceData, 500)
 	for i := range lines {
 		line := lines[i]
 		id := GetTraceIdFromByte(line)
@@ -291,7 +291,7 @@ func (r *Receiver) ConsumeByte(lines [][]byte) {
 			//td.Wrong = r.IfSpanWrong(line)
 			td := &common.TraceData{
 				Source: r.HttpPort,
-				Sb:     [][]byte{},
+				Sb:     make([][]byte, 0, 50),
 				Wrong:  IfSpanWrong(line),
 				//Status: common.TraceStatusReady,
 			}
