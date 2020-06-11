@@ -5,8 +5,9 @@ import (
 	"crypto/md5"
 	"encoding/hex"
 	"fmt"
-	"github.com/gin-gonic/gin"
+	"github.com/buaazp/fasthttprouter"
 	"github.com/ljy2010a/tailf-based-sampling/common"
+	"github.com/valyala/fasthttp"
 	"go.uber.org/zap"
 	"net/http"
 	"sort"
@@ -91,27 +92,21 @@ func (r *Compactor) Run() {
 	r.checkSumMap = make(map[string]string)
 	go r.finish()
 
-	router := gin.New()
-	//router.Use(gin.Logger())
-	router.Use(gin.Recovery())
-	router.GET("/ready", r.ReadyHandler)
-	router.GET("/setParameter", r.SetParamHandler)
-	router.POST("/sw", r.SetWrongHandler)
-	router.GET("/fn", r.NotifyFinishHandler)
-	err := router.Run(fmt.Sprintf(":%s", r.HttpPort))
-	if err != nil {
+	frouter := fasthttprouter.New()
+	frouter.GET("/ready", func(ctx *fasthttp.RequestCtx) {
+		r.logger.Info("ReadyHandler", zap.String("port", r.HttpPort))
+		ctx.SetStatusCode(http.StatusOK)
+	})
+	frouter.GET("/setParameter", r.SetParamHandler)
+	frouter.POST("/sw", r.SetWrongHandler)
+	frouter.GET("/fn", r.NotifyFinishHandler)
+	if err := fasthttp.ListenAndServe(fmt.Sprintf(":%s", r.HttpPort), frouter.Handler); err != nil {
 		r.logger.Info("r.HttpPort fail", zap.Error(err))
 	}
 }
 
-func (r *Compactor) ReadyHandler(c *gin.Context) {
-	r.logger.Info("ready", zap.String("port", r.HttpPort))
-	c.JSON(http.StatusOK, "ok")
-	return
-}
-
-func (r *Compactor) SetParamHandler(c *gin.Context) {
-	port := c.DefaultQuery("port", "")
+func (r *Compactor) SetParamHandler(ctx *fasthttp.RequestCtx) {
+	port := string(ctx.QueryArgs().Peek("port"))
 	r.DataPort = port
 	r.ReportUrl = fmt.Sprintf("http://127.0.0.1:%s/api/finished", r.DataPort)
 	r.startTime = time.Now()
@@ -119,24 +114,18 @@ func (r *Compactor) SetParamHandler(c *gin.Context) {
 		zap.String("port", r.HttpPort),
 		zap.String("set", r.DataPort),
 	)
-	c.JSON(http.StatusOK, "ok")
+	ctx.SetStatusCode(http.StatusOK)
 	return
 }
 
-func (r *Compactor) SetWrongHandler(c *gin.Context) {
-	over := c.DefaultQuery("over", "0")
+func (r *Compactor) SetWrongHandler(ctx *fasthttp.RequestCtx) {
+	over := string(ctx.QueryArgs().Peek("over"))
 	td := &common.TraceData{}
-	body, err := c.GetRawData()
-	if err != nil {
-		r.logger.Info("td get body fail", zap.Error(err))
-		c.AbortWithStatus(http.StatusBadRequest)
-		return
-	}
-	c.Request.Body.Close()
-	err = td.Unmarshal(body)
+	body := ctx.PostBody()
+	err := td.Unmarshal(body)
 	if err != nil {
 		r.logger.Info("td Unmarshal fail", zap.Error(err))
-		c.AbortWithStatus(http.StatusBadRequest)
+		ctx.SetStatusCode(http.StatusBadRequest)
 		return
 	}
 
@@ -154,23 +143,23 @@ func (r *Compactor) SetWrongHandler(c *gin.Context) {
 		otd := tdi.(*common.TraceData)
 		if otd.Md5 != "" {
 			r.logger.Info("md5 already exist ", zap.String("id", otd.Id))
-			c.AbortWithStatus(http.StatusOK)
+			ctx.SetStatusCode(http.StatusOK)
 			return
 		}
 		if otd.Source == td.Source {
 			r.logger.Info("source already exist ", zap.String("id", otd.Id))
-			c.AbortWithStatus(http.StatusOK)
+			ctx.SetStatusCode(http.StatusOK)
 			return
 		}
 		otd.AddSpan(td.Sb)
 		otd.Md5 = CompactMd5(otd)
 	}
-	c.AbortWithStatus(http.StatusOK)
+	ctx.SetStatusCode(http.StatusOK)
 	return
 }
 
-func (r *Compactor) NotifyFinishHandler(c *gin.Context) {
-	port := c.DefaultQuery("port", "")
+func (r *Compactor) NotifyFinishHandler(ctx *fasthttp.RequestCtx) {
+	port := string(ctx.QueryArgs().Peek("port"))
 	r.logger.Info("got notify fin ", zap.String("port", port))
 	times := atomic.AddInt64(&r.closeTimes, 1)
 	if times == 2 {

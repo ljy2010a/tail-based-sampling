@@ -25,9 +25,7 @@ type ChannelGroupConsume struct {
 }
 
 func NewChannelGroupConsume(receiver *Receiver, readDone func(), over func()) *ChannelGroupConsume {
-	// 300w = 10.67s , 13.15s
-	// 350w = 9.76s , 12.73s
-	// 500w = 1450MB , 6.98s , 9.52s  7.33 , 9.21
+	// 500w = 1450MB
 	blockLen := int(1.5 * 1024 * 1024 * 1024)
 	readBufSize := 256 * 1024 * 1024
 	return &ChannelGroupConsume{
@@ -54,18 +52,18 @@ func (c *ChannelGroupConsume) Read(rd io.Reader) {
 	//	}
 	//}()
 	btime := time.Now()
-	br := bufio.NewReaderSize(rd, c.readBufSize)
-	//scanner := bufio.NewScanner(rd)
-	//scanner.Buffer(c.scannerBlock, c.readBufSize)
-	//scanner.Split(bufio.ScanLines)
 	size := 0
 	total := 0
 	maxLine := 0
 	minLine := 0
 	i := 0
+	iLimit := c.lineGroupNum - 1
 	pos := 0
 	lines := make([][]byte, c.lineGroupNum)
 
+	//scanner := bufio.NewScanner(rd)
+	//scanner.Buffer(c.scannerBlock, c.readBufSize)
+	//scanner.Split(bufio.ScanLines)
 	//for scanner.Scan() {
 	//	line := scanner.Bytes()
 	//	lLen := len(line)
@@ -75,7 +73,7 @@ func (c *ChannelGroupConsume) Read(rd io.Reader) {
 	//	copy(c.lineBlock[pos:], line)
 	//	lines[i] = c.lineBlock[pos : pos+lLen]
 	//	pos += lLen
-	//	if i == c.lineGroupNum-1 {
+	//	if i == iLimit {
 	//		c.lineChan <- lines
 	//		lines = make([][]byte, c.lineGroupNum)
 	//		i = 0
@@ -84,25 +82,21 @@ func (c *ChannelGroupConsume) Read(rd io.Reader) {
 	//	i++
 	//}
 
+	br := bufio.NewReaderSize(rd, c.readBufSize)
 	for {
 		line, _, err := br.ReadLine()
 		if err == io.EOF {
 			break
 		}
 		//size += len(line)
-		lLen := len(line)
-		//if maxLine < lLen {
-		//	maxLine = lLen
-		//}
-		//if minLine > lLen || minLine == 0 {
-		//	minLine = lLen
-		//}
 		//total++
-		//nline := make([]byte, len(line))
-		//copy(nline, line)
-		//lines[i] = nline
+		lLen := len(line)
 
 		//lines[i] = line
+
+		//nline := make([]byte, lLen)
+		//copy(nline, line)
+		//lines[i] = nline
 
 		if pos+lLen > c.blockLen {
 			pos = 0
@@ -110,7 +104,8 @@ func (c *ChannelGroupConsume) Read(rd io.Reader) {
 		copy(c.lineBlock[pos:], line)
 		lines[i] = c.lineBlock[pos : pos+lLen]
 		pos += lLen
-		if i == c.lineGroupNum-1 {
+
+		if i == iLimit {
 			c.lineChan <- lines
 			lines = make([][]byte, c.lineGroupNum)
 			i = 0

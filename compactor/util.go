@@ -9,8 +9,9 @@ import (
 var (
 	c = &fasthttp.Client{
 		MaxConnsPerHost: 10000,
-		ReadTimeout:     400 * time.Millisecond,
-		WriteTimeout:    400 * time.Millisecond,
+		//MaxIdleConnDuration: 10 * time.Second,
+		ReadTimeout:  500 * time.Millisecond,
+		WriteTimeout: 500 * time.Millisecond,
 	}
 )
 

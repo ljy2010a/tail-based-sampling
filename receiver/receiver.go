@@ -3,9 +3,10 @@ package receiver
 import (
 	"bytes"
 	"fmt"
-	"github.com/gin-gonic/gin"
+	"github.com/buaazp/fasthttprouter"
 	lru "github.com/hashicorp/golang-lru"
 	"github.com/ljy2010a/tailf-based-sampling/common"
+	"github.com/valyala/fasthttp"
 	"go.uber.org/zap"
 	"net/http"
 	"os"
@@ -170,25 +171,20 @@ func (r *Receiver) Run() {
 
 	go r.finish()
 
-	router := gin.New()
-	router.Use(gin.Recovery())
-	router.GET("/ready", r.ReadyHandler)
-	router.GET("/setParameter", r.SetParamHandler)
-	router.GET("/qw", r.QueryWrongHandler)
-	err = router.Run(fmt.Sprintf(":%s", r.HttpPort))
-	if err != nil {
+	frouter := fasthttprouter.New()
+	frouter.GET("/ready", func(ctx *fasthttp.RequestCtx) {
+		r.logger.Info("ReadyHandler", zap.String("port", r.HttpPort))
+		ctx.SetStatusCode(http.StatusOK)
+	})
+	frouter.GET("/setParameter", r.SetParamHandler)
+	frouter.GET("/qw", r.QueryWrongHandler)
+	if err := fasthttp.ListenAndServe(fmt.Sprintf(":%s", r.HttpPort), frouter.Handler); err != nil {
 		r.logger.Info("r.HttpPort fail", zap.Error(err))
 	}
 }
 
-func (r *Receiver) ReadyHandler(c *gin.Context) {
-	r.logger.Info("ReadyHandler", zap.String("port", r.HttpPort))
-	c.JSON(http.StatusOK, "ok")
-	return
-}
-
-func (r *Receiver) SetParamHandler(c *gin.Context) {
-	port := c.DefaultQuery("port", "")
+func (r *Receiver) SetParamHandler(ctx *fasthttp.RequestCtx) {
+	port := string(ctx.QueryArgs().Peek("port"))
 	r.DataPort = port
 	r.logger.Info("SetParamHandler",
 		zap.String("port", r.HttpPort),
@@ -204,13 +200,13 @@ func (r *Receiver) SetParamHandler(c *gin.Context) {
 		dataUrl2 := fmt.Sprintf("http://127.0.0.1:%s/trace2.data", r.DataPort)
 		go r.ReadHttp(dataUrl2)
 	}
-	c.JSON(http.StatusOK, "ok")
+	ctx.SetStatusCode(http.StatusOK)
 	return
 }
 
-func (r *Receiver) QueryWrongHandler(c *gin.Context) {
-	id := c.DefaultQuery("id", "")
-	over := c.DefaultQuery("over", "0")
+func (r *Receiver) QueryWrongHandler(ctx *fasthttp.RequestCtx) {
+	id := string(ctx.QueryArgs().Peek("id"))
+	over := string(ctx.QueryArgs().Peek("over"))
 	r.wrongIdMap.Store(id, true)
 	//if id == "c074d0a90cd607b" {
 	//	r.logger.Info("got wrong example notify",
@@ -240,11 +236,7 @@ func (r *Receiver) QueryWrongHandler(c *gin.Context) {
 			if over == "1" {
 				//SendWrongRequestB(ltd, r.CompactorSetWrongUrl, b, "", nil)
 				SendWrongRequest(ltd, r.CompactorSetWrongUrl, "", nil)
-				//r.logger.Info("query wrong in over",
-				//	zap.String("id", id),
-				//)
 			} else {
-				//r.lruCache.Remove(id)
 				go func() {
 					//SendWrongRequestB(ltd, r.CompactorSetWrongUrl, b, "", nil)
 					SendWrongRequest(ltd, r.CompactorSetWrongUrl, "", nil)
@@ -274,7 +266,7 @@ func (r *Receiver) QueryWrongHandler(c *gin.Context) {
 	//	}
 	//}
 	//}
-	c.JSON(http.StatusOK, "")
+	ctx.SetStatusCode(http.StatusOK)
 	return
 }
 
