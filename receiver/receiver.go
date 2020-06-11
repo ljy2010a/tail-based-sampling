@@ -39,11 +39,11 @@ type Receiver struct {
 	minSpanNums int
 	overWg      sync.WaitGroup
 	//tdPool      *sync.Pool
-	//spanPool    *sync.Pool
 	AutoDetect bool
 	mapMaxSize int
 	mapMinSize int
 	traceMiss  int
+	wrongHit   int
 }
 
 func (r *Receiver) Run() {
@@ -131,17 +131,11 @@ func (r *Receiver) Run() {
 	//	New: func() interface{} {
 	//		return &common.TraceData{
 	//			Source: r.HttpPort,
-	//			Status: common.TraceStatusReady,
-	//			Sb:     [][]byte{},
+	//			Sb:     make([][]byte, 0, 40),
 	//		}
 	//	},
 	//}
 	//
-	//r.spanPool = &sync.Pool{
-	//	New: func() interface{} {
-	//		return &common.SpanData{}
-	//	},
-	//}
 
 	// 10000条 = 2.9MB
 	// 6.5 * 20 * 2.9 = 377
@@ -288,23 +282,26 @@ func (r *Receiver) ConsumeByte(lines [][]byte) {
 	idToSpans := make(map[string]*common.TraceData, 800)
 	for i := range lines {
 		line := lines[i]
-		id := GetTraceIdFromByte(line)
+		id, wrong := GetTraceIdWrongByString(line)
 		if etd, ok := idToSpans[id]; !ok {
 			//tdi := r.tdPool.Get()
 			//td := tdi.(*common.TraceData)
-			//td.Wrong = r.IfSpanWrong(line)
+			//td.Wrong = IfSpanWrong(line)
 			td := &common.TraceData{
 				Source: r.HttpPort,
 				Sb:     make([][]byte, 0, 50),
-				Wrong:  IfSpanWrong(line),
-				//Status: common.TraceStatusReady,
+				//Wrong:  IfSpanWrong(line),
+				Wrong: wrong,
 			}
 			td.Id = id
 			//td.AddOne(line)
 			td.Sb = append(td.Sb, line)
 			idToSpans[id] = td
 		} else {
-			if !etd.Wrong && IfSpanWrong(line) {
+			//if !etd.Wrong && IfSpanWrong(line) {
+			//	etd.Wrong = true
+			//}
+			if !etd.Wrong && wrong {
 				etd.Wrong = true
 			}
 			//etd.AddOne(line)
@@ -312,10 +309,10 @@ func (r *Receiver) ConsumeByte(lines [][]byte) {
 		}
 	}
 
-	mapSize := len(idToSpans)
-	if mapSize > r.mapMaxSize {
-		r.mapMaxSize = mapSize
-	}
+	//mapSize := len(idToSpans)
+	//if mapSize > r.mapMaxSize {
+	//	r.mapMaxSize = mapSize
+	//}
 
 	for id, etd := range idToSpans {
 		exist, _ := r.lruCache.ContainsOrAdd(id, etd)
@@ -361,7 +358,7 @@ func (r *Receiver) dropTrace(id string, over string) {
 		return
 	}
 	td := d.(*common.TraceData)
-	//spLen := len(td.Sd)
+	//spLen := len(td.Sb)
 	//if r.maxSpanNums < spLen {
 	//	r.maxSpanNums = spLen
 	//}
@@ -373,6 +370,7 @@ func (r *Receiver) dropTrace(id string, over string) {
 		_, ok := r.wrongIdMap.Load(td.Id)
 		if ok {
 			wrong = true
+			r.wrongHit++
 		}
 	}
 	if wrong && td.Status != common.TraceStatusSended {
@@ -382,7 +380,6 @@ func (r *Receiver) dropTrace(id string, over string) {
 	} else {
 		td.Status = common.TraceStatusDone
 	}
-	//r.lruCache.Add(id, td)
 }
 
 func (r *Receiver) finish() {
@@ -422,6 +419,7 @@ func (r *Receiver) finish() {
 		zap.Int("minSpanNums", r.minSpanNums),
 		zap.Int("mapMaxSize", r.mapMaxSize),
 		zap.Int("traceMiss", r.traceMiss),
+		zap.Int("wrongHit", r.wrongHit),
 	)
 	r.notifyFIN()
 }
@@ -448,9 +446,11 @@ var (
 	S1       = []byte("|")
 )
 
-func GetTraceIdWrongFromString(line []byte) (string, bool) {
+func GetTraceIdWrongByString(line []byte) (string, bool) {
+	//firstIdx := bytes.IndexByte(line, '|')
+	//id := common.BytesToString(line[:firstIdx])
 	l := common.BytesToString(line)
-	id := l[:strings.Index(l, "|")]
+	id := l[:strings.IndexByte(l, '|')]
 	if strings.Contains(l, "error=1") {
 		return id, true
 	}
@@ -465,9 +465,9 @@ func GetTraceIdWrongFromString(line []byte) (string, bool) {
 	return id, false
 }
 
-func GetTraceIdWrongFromByte(line []byte) (string, bool) {
-	l := common.BytesToString(line)
-	id := l[:strings.IndexByte(l, '|')]
+func GetTraceIdWrongByByte(line []byte) (string, bool) {
+	firstIdx := bytes.IndexByte(line, '|')
+	id := common.BytesToString(line[:firstIdx])
 	if bytes.Contains(line, Ferr1) {
 		return id, true
 	}
@@ -477,7 +477,12 @@ func GetTraceIdWrongFromByte(line []byte) (string, bool) {
 	return id, false
 }
 
-func GetTraceIdFromByte(line []byte) string {
+func GetTraceIdByString(line []byte) string {
+	l := common.BytesToString(line)
+	return l[:strings.IndexByte(l, '|')]
+}
+
+func GetTraceIdByByte(line []byte) string {
 	firstIdx := bytes.IndexByte(line, '|')
 	return common.BytesToString(line[:firstIdx])
 }

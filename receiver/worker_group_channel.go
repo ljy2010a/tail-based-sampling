@@ -29,7 +29,7 @@ func NewChannelGroupConsume(receiver *Receiver, readDone func(), over func()) *C
 	// 350w = 9.76s , 12.73s
 	// 500w = 1450MB , 6.98s , 9.52s  7.33 , 9.21
 	blockLen := int(1.5 * 1024 * 1024 * 1024)
-	readBufSize := 64 * 1024 * 1024
+	readBufSize := 256 * 1024 * 1024
 	return &ChannelGroupConsume{
 		receiver:     receiver,
 		logger:       receiver.logger,

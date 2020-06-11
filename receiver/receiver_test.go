@@ -113,7 +113,7 @@ func BenchmarkGetTraceIdFromString(b *testing.B) {
 	b.ResetTimer()
 	b.ReportAllocs()
 	for n := 0; n < b.N; n++ {
-		GetTraceIdWrongFromString(s)
+		GetTraceIdWrongByString(s)
 	}
 }
 
@@ -122,6 +122,6 @@ func BenchmarkGetTraceIdFromByte(b *testing.B) {
 	b.ResetTimer()
 	b.ReportAllocs()
 	for n := 0; n < b.N; n++ {
-		GetTraceIdWrongFromByte(s)
+		GetTraceIdWrongByByte(s)
 	}
 }
