@@ -3,7 +3,6 @@ package receiver
 import (
 	"fmt"
 	"github.com/ljy2010a/tailf-based-sampling/common"
-	"github.com/panjf2000/ants/v2"
 	"github.com/valyala/fasthttp"
 	"sync"
 	"time"
@@ -16,12 +15,12 @@ var (
 		ReadTimeout:         500 * time.Millisecond,
 		WriteTimeout:        500 * time.Millisecond,
 	}
-	reqPool *ants.Pool
+	//reqPool *ants.Pool
 )
 
-func init() {
-	reqPool, _ = ants.NewPool(1000, ants.WithPreAlloc(true))
-}
+//func init() {
+//	reqPool, _ = ants.NewPool(1000, ants.WithPreAlloc(true))
+//}
 
 func SendWrongRequestB(td *common.TraceData, reqUrl string, b []byte, over string, wg *sync.WaitGroup) {
 

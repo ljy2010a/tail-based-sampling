@@ -230,7 +230,7 @@ func CompactMd5(td *common.TraceData) string {
 	h := md5.New()
 	for _, span := range spans {
 		h.Write(span.Tags)
-		h.Write([]byte("\n"))
+		//h.Write([]byte("\n"))
 		//if td.Id == "c074d0a90cd607b" {
 		//	fmt.Println(span.Tags)
 		//}
@@ -247,8 +247,8 @@ var (
 
 func ParseSpanData(line []byte) *common.SpanData {
 	spanData := &common.SpanData{}
-	firstIdx := bytes.Index(line, S1)
-	secondIdx := bytes.Index(line[firstIdx+1:], S1)
+	firstIdx := bytes.IndexByte(line, '|')
+	secondIdx := bytes.IndexByte(line[firstIdx+1:], '|')
 	spanData.StartTime = common.BytesToString(line[firstIdx+1 : firstIdx+1+secondIdx])
 	spanData.Tags = line
 	return spanData

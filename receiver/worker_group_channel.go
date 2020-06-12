@@ -1,7 +1,6 @@
 package receiver
 
 import (
-	"bufio"
 	"go.uber.org/zap"
 	"io"
 	"sync"
@@ -27,7 +26,7 @@ type ChannelGroupConsume struct {
 func NewChannelGroupConsume(receiver *Receiver, readDone func(), over func()) *ChannelGroupConsume {
 	// 500w = 1450MB
 	blockLen := int(1.5 * 1024 * 1024 * 1024)
-	readBufSize := 256 * 1024 * 1024
+	readBufSize := 64 * 1024 * 1024
 	return &ChannelGroupConsume{
 		receiver:     receiver,
 		logger:       receiver.logger,
@@ -39,7 +38,7 @@ func NewChannelGroupConsume(receiver *Receiver, readDone func(), over func()) *C
 		overFunc:     over,
 		blockLen:     blockLen,
 		lineBlock:    make([]byte, blockLen),
-		//scannerBlock: make([]byte, readBufSize),
+		//scannerBlock: make([]byte, blockLen),
 	}
 }
 
@@ -58,7 +57,7 @@ func (c *ChannelGroupConsume) Read(rd io.Reader) {
 	minLine := 0
 	i := 0
 	iLimit := c.lineGroupNum - 1
-	pos := 0
+	//pos := 0
 	lines := make([][]byte, c.lineGroupNum)
 
 	//scanner := bufio.NewScanner(rd)
@@ -82,28 +81,29 @@ func (c *ChannelGroupConsume) Read(rd io.Reader) {
 	//	i++
 	//}
 
-	br := bufio.NewReaderSize(rd, c.readBufSize)
+	br := NewReaderSize(rd, c.blockLen, c.readBufSize, c.lineBlock)
+	//br := bufio.NewReaderSize(rd, c.readBufSize)
 	for {
-		line, _, err := br.ReadLine()
+		line, err := br.ReadSlice('\n')
 		if err == io.EOF {
+			break
+		}
+		if err != nil {
+			c.logger.Info("err", zap.Error(err))
 			break
 		}
 		//size += len(line)
 		//total++
-		lLen := len(line)
+		//lLen := len(line)
 
-		//lines[i] = line
+		lines[i] = line
 
-		//nline := make([]byte, lLen)
-		//copy(nline, line)
-		//lines[i] = nline
-
-		if pos+lLen > c.blockLen {
-			pos = 0
-		}
-		copy(c.lineBlock[pos:], line)
-		lines[i] = c.lineBlock[pos : pos+lLen]
-		pos += lLen
+		//if pos+lLen > c.blockLen {
+		//	pos = 0
+		//}
+		//copy(c.lineBlock[pos:], line)
+		//lines[i] = c.lineBlock[pos : pos+lLen]
+		//pos += lLen
 
 		if i == iLimit {
 			c.lineChan <- lines

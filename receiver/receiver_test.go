@@ -108,7 +108,7 @@ func RandStringBytesMaskImprSrc(n int) []byte {
 	return b
 }
 
-func BenchmarkGetTraceIdFromString(b *testing.B) {
+func BenchmarkGetTraceIdWrongByString(b *testing.B) {
 	s := []byte("1d37a8b17db8568b|1589285985482007|3d1e7e1147c1895d|1d37a8b17db8568b|1259|InventoryCenter|/api/traces|192.168.0.2|http.status_code=200&http.url=http://tracing.console.aliyun.com/getOrder&component=java-web-servlet&span.kind=server&http.method=GET")
 	b.ResetTimer()
 	b.ReportAllocs()
@@ -117,11 +117,31 @@ func BenchmarkGetTraceIdFromString(b *testing.B) {
 	}
 }
 
-func BenchmarkGetTraceIdFromByte(b *testing.B) {
+func BenchmarkGetTraceIdWrongByByte(b *testing.B) {
 	s := []byte("1d37a8b17db8568b|1589285985482007|3d1e7e1147c1895d|1d37a8b17db8568b|1259|InventoryCenter|/api/traces|192.168.0.2|http.status_code=200&http.url=http://tracing.console.aliyun.com/getOrder&component=java-web-servlet&span.kind=server&http.method=GET")
 	b.ResetTimer()
 	b.ReportAllocs()
 	for n := 0; n < b.N; n++ {
 		GetTraceIdWrongByByte(s)
+	}
+}
+
+func BenchmarkGroupString(b *testing.B) {
+	s := []byte("1d37a8b17db8568b|1589285985482007|3d1e7e1147c1895d|1d37a8b17db8568b|1259|InventoryCenter|/api/traces|192.168.0.2|http.status_code=200&http.url=http://tracing.console.aliyun.com/getOrder&component=java-web-servlet&span.kind=server&http.method=GET")
+	b.ResetTimer()
+	b.ReportAllocs()
+	for n := 0; n < b.N; n++ {
+		GetTraceIdByString(s)
+		IfSpanWrongString(s)
+	}
+}
+
+func BenchmarkGroupByte(b *testing.B) {
+	s := []byte("1d37a8b17db8568b|1589285985482007|3d1e7e1147c1895d|1d37a8b17db8568b|1259|InventoryCenter|/api/traces|192.168.0.2|http.status_code=200&http.url=http://tracing.console.aliyun.com/getOrder&component=java-web-servlet&span.kind=server&http.method=GET")
+	b.ResetTimer()
+	b.ReportAllocs()
+	for n := 0; n < b.N; n++ {
+		GetTraceIdByByte(s)
+		IfSpanWrongByte(s)
 	}
 }

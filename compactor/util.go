@@ -2,7 +2,6 @@ package compactor
 
 import (
 	"fmt"
-	"github.com/panjf2000/ants/v2"
 	"github.com/valyala/fasthttp"
 	"time"
 )
@@ -10,16 +9,16 @@ import (
 var (
 	c = &fasthttp.Client{
 		MaxConnsPerHost:     20000,
-		MaxIdleConnDuration: 10 * time.Second,
+		//MaxIdleConnDuration: 10 * time.Second,
 		ReadTimeout:         500 * time.Millisecond,
 		WriteTimeout:        500 * time.Millisecond,
 	}
-	reqPool *ants.Pool
+	//reqPool *ants.Pool
 )
 
-func init() {
-	reqPool, _ = ants.NewPool(1000, ants.WithPreAlloc(true))
-}
+//func init() {
+//	reqPool, _ = ants.NewPool(1000, ants.WithPreAlloc(true))
+//}
 
 func NotifyAnotherWrong(reqUrl string) {
 	req := fasthttp.AcquireRequest()
