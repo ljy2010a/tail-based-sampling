@@ -7,10 +7,10 @@ require (
 	github.com/buaazp/fasthttprouter v0.1.1
 	github.com/cespare/xxhash v1.1.0 // indirect
 	github.com/coocood/freecache v1.1.0
-	github.com/gin-gonic/gin v1.4.0
 	github.com/gogo/protobuf v1.3.1
 	github.com/hashicorp/golang-lru v0.5.3
 	github.com/klauspost/compress v1.8.3 // indirect
+	github.com/panjf2000/ants/v2 v2.2.2
 	github.com/pkg/errors v0.8.1 // indirect
 	github.com/stretchr/testify v1.4.0 // indirect
 	github.com/valyala/fasthttp v1.5.0
