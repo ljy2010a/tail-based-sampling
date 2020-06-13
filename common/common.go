@@ -3,10 +3,11 @@ package common
 import "sync"
 
 const (
-	TraceStatusReady  = 0
-	TraceStatusSkip   = 1
-	TraceStatusSended = 2
-	TraceStatusDone   = 3
+	TraceStatusReady    = 0
+	TraceStatusWrongSet = 1
+	TraceStatusSkip     = 2
+	TraceStatusSended   = 3
+	TraceStatusDone     = 4
 )
 
 func (m *TraceData) AddSpan(newSpans [][]byte) {

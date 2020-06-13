@@ -27,7 +27,7 @@ type Receiver struct {
 	closeTimes int64
 	sync.Mutex
 
-	wrongIdMap  sync.Map
+	//wrongIdMap  sync.Map
 	consumer    *ChannelGroupConsume
 	traceNums   int64
 	maxSpanNums int
@@ -175,18 +175,19 @@ func (r *Receiver) SetParamHandler(ctx *fasthttp.RequestCtx) {
 func (r *Receiver) QueryWrongHandler(ctx *fasthttp.RequestCtx) {
 	id := string(ctx.QueryArgs().Peek("id"))
 	over := string(ctx.QueryArgs().Peek("over"))
-	r.wrongIdMap.Store(id, true)
+	//r.wrongIdMap.Store(id, true)
 	//if id == "c074d0a90cd607b" {
 	//	r.logger.Info("got wrong example notify",
 	//		zap.String("id", id),
 	//	)
 	//}
-	//td := &common.TData{
-	//	Wrong: true,
-	//	Sbi:   make([]int, 0, 60),
-	//}
-	//ltd, lexist := r.idToTrace.LoadOrStore(id, td)
-	ltd, lexist := r.idToTrace.Load(id)
+	td := &common.TData{
+		Status: common.TraceStatusWrongSet,
+		Wrong:  true,
+		Sbi:    make([]int, 0, 60),
+	}
+	ltd, lexist := r.idToTrace.LoadOrStore(id, td)
+	//ltd, lexist := r.idToTrace.Load(id)
 	if lexist {
 		ltd.Wrong = true
 		if ltd.Status == common.TraceStatusDone {
@@ -255,26 +256,31 @@ func (r *Receiver) ConsumeByte(lines []int) {
 			if !td.Wrong && etd.Wrong {
 				td.Wrong = true
 			}
+			if td.Status == common.TraceStatusWrongSet {
+				goto SET_AND_DROP
+			}
 			continue
 		}
 		if td.Status == common.TraceStatusSkip {
 			r.traceSkip++
 			r.dropTrace(id, td, "0")
-		} else {
-			postDeletion := false
-			for !postDeletion {
-				select {
-				case r.deleteChan <- id:
-					postDeletion = true
-				default:
-					//<-r.deleteChan
-					dropId, ok := <-r.deleteChan
-					if ok {
-						r.dropTraceById(dropId, "0")
-					}
+			continue
+		}
+	SET_AND_DROP:
+		postDeletion := false
+		for !postDeletion {
+			select {
+			case r.deleteChan <- id:
+				postDeletion = true
+			default:
+				//<-r.deleteChan
+				dropId, ok := <-r.deleteChan
+				if ok {
+					r.dropTraceById(dropId, "0")
 				}
 			}
 		}
+
 	}
 }
 
@@ -288,13 +294,13 @@ func (r *Receiver) dropTrace(id string, td *common.TData, over string) {
 	//	r.minSpanNums = spLen
 	//}
 	wrong := td.Wrong
-	if !wrong {
-		_, ok := r.wrongIdMap.Load(id)
-		if ok {
-			wrong = true
-			r.wrongHit++
-		}
-	}
+	//if !wrong {
+	//	_, ok := r.wrongIdMap.Load(id)
+	//	if ok {
+	//		wrong = true
+	//		r.wrongHit++
+	//	}
+	//}
 	//wrong = false
 	if wrong && td.Status != common.TraceStatusSended {
 		td.Status = common.TraceStatusSended
