@@ -9,10 +9,10 @@ import (
 
 var (
 	c = &fasthttp.Client{
-		MaxConnsPerHost: 20000,
-		//MaxIdleConnDuration: 10 * time.Second,
-		ReadTimeout:  500 * time.Millisecond,
-		WriteTimeout: 500 * time.Millisecond,
+		MaxConnsPerHost:     20000,
+		MaxIdleConnDuration: 10 * time.Second,
+		ReadTimeout:         500 * time.Millisecond,
+		WriteTimeout:        500 * time.Millisecond,
 	}
 	//reqPool *ants.Pool
 )

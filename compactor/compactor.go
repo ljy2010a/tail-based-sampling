@@ -1,7 +1,6 @@
 package compactor
 
 import (
-	"bytes"
 	"crypto/md5"
 	"encoding/hex"
 	"fmt"
@@ -240,15 +239,12 @@ func CompactMd5(td *common.TraceData) string {
 	return strings.ToUpper(hex.EncodeToString(h.Sum(nil)))
 }
 
-var (
-	S1 = []byte("|")
-)
-
 func ParseSpanData(line []byte) *common.SpanData {
 	spanData := &common.SpanData{}
-	firstIdx := bytes.IndexByte(line, '|')
-	secondIdx := bytes.IndexByte(line[firstIdx+1:], '|')
-	spanData.StartTime = common.BytesToString(line[firstIdx+1 : firstIdx+1+secondIdx])
+	l := common.BytesToString(line)
+	firstIdx := strings.IndexByte(l, '|')
+	secondIdx := strings.IndexByte(l[firstIdx+1:], '|')
+	spanData.StartTime = l[firstIdx+1 : firstIdx+1+secondIdx]
 	spanData.Tags = line
 	return spanData
 }

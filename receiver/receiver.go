@@ -258,7 +258,8 @@ func (r *Receiver) ConsumeByte(lines []int) {
 		if exist {
 			// 已存在
 			r.traceMiss++
-			td.AddSpani(etd.Sbi)
+			//td.AddSpani(etd.Sbi)
+			td.Sbi = append(td.Sbi, etd.Sbi...)
 			if !td.Wrong && etd.Wrong {
 				td.Wrong = true
 			}
@@ -439,32 +440,32 @@ func IfSpanWrongByte(line []byte) bool {
 }
 
 func IfSpanWrongString(line []byte) bool {
-	l := common.BytesToString(line)
-	if strings.Contains(l, "error=1") {
-		return true
-	}
-	pos := strings.Index(l, "http.status_code=")
-	if pos == -1 {
-		return false
-	}
-	if l[pos+17:pos+20] != "200" {
-		return true
-	}
-	return false
-
 	//l := common.BytesToString(line)
 	//if strings.Contains(l, "error=1") {
 	//	return true
 	//}
 	//pos := strings.Index(l, "http.status_code=")
 	//if pos == -1 {
-	//	//if strings.Contains(l, "error=1") {
-	//	//	return true
-	//	//}
 	//	return false
 	//}
-	////return !strings.EqualFold(l[pos+17:pos+20], "200")
-	//
+	//if l[pos+17:pos+20] != "200" {
+	//	return true
+	//}
+	//return false
+
+	l := common.BytesToString(line)
+	//if strings.Contains(l, "error=1") {
+	//	return true
+	//}
+	pos := strings.Index(l, "http.status_code=")
+	if pos == -1 {
+		if strings.Contains(l, "error=1") {
+			return true
+		}
+		return false
+	}
+	return !strings.EqualFold(l[pos+17:pos+20], "200")
+
 	//if l[pos+17:pos+20] != "200" {
 	//	return true
 	//}

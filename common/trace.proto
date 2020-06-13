@@ -16,15 +16,15 @@ message TraceData {
     string Id = 1;
     string Source = 2;
     string Md5 = 3;
-    bool Wrong = 4;
-    int64 status = 5;
+//    bool Wrong = 4;
+//    int64 status = 5;
     repeated bytes Sb = 7;
 }
 
-message SpanData {
-    string TraceId = 1;
-    string StartTime = 2;
-    bytes Tags = 3;
-    bool Wrong = 4;
-}
+//message SpanData {
+//    string TraceId = 1;
+//    string StartTime = 2;
+//    bytes Tags = 3;
+//    bool Wrong = 4;
+//}
 
