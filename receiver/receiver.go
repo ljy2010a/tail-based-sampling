@@ -8,8 +8,6 @@ import (
 	"github.com/valyala/fasthttp"
 	"go.uber.org/zap"
 	"net/http"
-	"os"
-	"runtime"
 	"strings"
 	"sync"
 	"sync/atomic"
@@ -25,7 +23,6 @@ type Receiver struct {
 	idToTrace            *common.TDataMap
 
 	deleteChan chan string
-	finishBool bool
 	finishChan chan interface{}
 	closeTimes int64
 	sync.Mutex
@@ -40,30 +37,30 @@ type Receiver struct {
 	mapMaxSize  int
 	mapMinSize  int
 	traceMiss   int
+	traceSkip   int
 	wrongHit    int
 }
 
 func (r *Receiver) Run() {
-	r.finishBool = false
 	//var err error
 	r.logger, _ = zap.NewProduction()
 	defer r.logger.Sync()
-	go func() {
-		i := 0
-		for {
-			if i > 4 {
-				r.logger.Info("too long to stop")
-				time.Sleep(10 * time.Second)
-				os.Exit(0)
-			}
-			i++
-			r.logger.Info("sleep",
-				zap.String("port", r.HttpPort),
-				zap.Int("i", i),
-			)
-			time.Sleep(1 * time.Minute)
-		}
-	}()
+	//go func() {
+	//	i := 0
+	//	for {
+	//		if i > 4 {
+	//			r.logger.Info("too long to stop")
+	//			time.Sleep(10 * time.Second)
+	//			os.Exit(0)
+	//		}
+	//		i++
+	//		r.logger.Info("sleep",
+	//			zap.String("port", r.HttpPort),
+	//			zap.Int("i", i),
+	//		)
+	//		time.Sleep(1 * time.Minute)
+	//	}
+	//}()
 	go func() {
 		if !r.AutoDetect {
 			return
@@ -105,32 +102,32 @@ func (r *Receiver) Run() {
 			}
 		}
 	}()
-	go func() {
-		i := 0
-		for {
-			b2Mb := func(b uint64) uint64 {
-				return b / 1024 / 1024
-			}
-			var m runtime.MemStats
-			runtime.ReadMemStats(&m)
-
-			r.logger.Info("MEM STAT",
-				zap.Int("times", i),
-				zap.Uint64("Alloc", b2Mb(m.Alloc)),
-				zap.Uint64("TotalAlloc", b2Mb(m.TotalAlloc)),
-				zap.Uint64("HeapInuse", b2Mb(m.HeapInuse)),
-				zap.Uint64("HeapAlloc", b2Mb(m.HeapAlloc)),
-				zap.Uint64("Sys", b2Mb(m.Sys)),
-				zap.Uint32("NumGC", m.NumGC),
-			)
-			i++
-			time.Sleep(1 * time.Second)
-		}
-	}()
+	//go func() {
+	//	i := 0
+	//	for {
+	//		b2Mb := func(b uint64) uint64 {
+	//			return b / 1024 / 1024
+	//		}
+	//		var m runtime.MemStats
+	//		runtime.ReadMemStats(&m)
+	//
+	//		r.logger.Info("MEM STAT",
+	//			zap.Int("times", i),
+	//			zap.Uint64("Alloc", b2Mb(m.Alloc)),
+	//			zap.Uint64("TotalAlloc", b2Mb(m.TotalAlloc)),
+	//			zap.Uint64("HeapInuse", b2Mb(m.HeapInuse)),
+	//			zap.Uint64("HeapAlloc", b2Mb(m.HeapAlloc)),
+	//			zap.Uint64("Sys", b2Mb(m.Sys)),
+	//			zap.Uint32("NumGC", m.NumGC),
+	//		)
+	//		i++
+	//		time.Sleep(1 * time.Second)
+	//	}
+	//}()
 
 	r.idToTrace = common.NewTDataMap()
 
-	r.deleteChan = make(chan string, 4000)
+	r.deleteChan = make(chan string, 6000)
 	r.finishChan = make(chan interface{})
 	doneFunc := func() {
 	}
@@ -184,12 +181,9 @@ func (r *Receiver) QueryWrongHandler(ctx *fasthttp.RequestCtx) {
 	//		zap.String("id", id),
 	//	)
 	//}
-	//td := &common.TraceData{
-	//	Id:     id,
-	//	Source: r.HttpPort,
-	//	Md5:    "",
-	//	Wrong:  true,
-	//	Sbi:    make([]int, 60),
+	//td := &common.TData{
+	//	Wrong: true,
+	//	Sbi:   make([]int, 0, 60),
 	//}
 	//ltd, lexist := r.idToTrace.LoadOrStore(id, td)
 	ltd, lexist := r.idToTrace.Load(id)
@@ -217,7 +211,7 @@ func (r *Receiver) QueryWrongHandler(ctx *fasthttp.RequestCtx) {
 }
 
 func (r *Receiver) ConsumeByte(lines []int) {
-	idToSpans := make(map[string]*common.TData, 800)
+	idToSpans := make(map[string]*common.TData, 1000)
 	for i, val := range lines {
 		start := val >> 16
 		llen := val & 0xffff
@@ -230,10 +224,9 @@ func (r *Receiver) ConsumeByte(lines []int) {
 				Wrong: IfSpanWrongString(line),
 				//Wrong:  wrong,
 			}
-			if i > 2_0000 && i < 8_0000 {
+			if i > 2_0000 && i < 18_0000 {
 				td.Status = common.TraceStatusSkip
 			}
-			//td.Id = id
 			td.Sbi = append(td.Sbi, val)
 			idToSpans[id] = td
 		} else {
@@ -265,6 +258,7 @@ func (r *Receiver) ConsumeByte(lines []int) {
 			continue
 		}
 		if td.Status == common.TraceStatusSkip {
+			r.traceSkip++
 			r.dropTrace(id, td, "0")
 		} else {
 			postDeletion := false
@@ -286,7 +280,6 @@ func (r *Receiver) ConsumeByte(lines []int) {
 
 func (r *Receiver) dropTrace(id string, td *common.TData, over string) {
 	atomic.AddInt64(&r.traceNums, 1)
-	//td := d.(*common.TraceData)
 	//spLen := len(td.Sb)
 	//if r.maxSpanNums < spLen {
 	//	r.maxSpanNums = spLen
@@ -351,7 +344,6 @@ func (r *Receiver) finish() {
 		}()
 	}
 	fwg.Wait()
-	r.finishBool = true
 	r.overWg.Wait()
 	r.logger.Info("finish over",
 		zap.Duration("finish cost", ftime),
@@ -361,24 +353,10 @@ func (r *Receiver) finish() {
 		zap.Int("minSpanNums", r.minSpanNums),
 		zap.Int("mapMaxSize", r.mapMaxSize),
 		zap.Int("traceMiss", r.traceMiss),
+		zap.Int("traceSkip", r.traceSkip),
 		zap.Int("wrongHit", r.wrongHit),
 	)
 	r.notifyFIN()
-}
-
-func (r *Receiver) notifyFIN() {
-	notifyUrl := fmt.Sprintf("http://127.0.0.1:%s/fn?port=%s", r.CompactorPort, r.HttpPort)
-	body, err := http.Get(notifyUrl)
-	if err != nil {
-		r.logger.Info("send notify fin",
-			zap.Error(err),
-		)
-	} else {
-		r.logger.Info("send notify fin",
-			zap.Int("code", body.StatusCode),
-		)
-	}
-
 }
 
 var (

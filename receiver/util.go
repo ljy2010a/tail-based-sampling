@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"github.com/ljy2010a/tailf-based-sampling/common"
 	"github.com/valyala/fasthttp"
+	"go.uber.org/zap"
 	"time"
 )
 
@@ -60,4 +61,30 @@ func (r *Receiver) SendWrongRequest(id string, td *common.TData, reqUrl string, 
 		return
 	}
 
+}
+
+func (r *Receiver) notifyFIN() {
+	notifyUrl := fmt.Sprintf("http://127.0.0.1:%s/fn?port=%s", r.CompactorPort, r.HttpPort)
+
+	req := fasthttp.AcquireRequest()
+	defer fasthttp.ReleaseRequest(req)
+
+	req.SetRequestURI(notifyUrl)
+	req.Header.SetMethod("GET")
+
+	resp := fasthttp.AcquireResponse()
+	defer fasthttp.ReleaseResponse(resp)
+
+	if err := c.Do(req, resp); err != nil {
+		r.logger.Info("send notify fin",
+			zap.Error(err),
+		)
+		return
+	}
+	if resp.StatusCode() != fasthttp.StatusOK {
+		r.logger.Info("send notify fin",
+			zap.Int("code", resp.StatusCode()),
+		)
+		return
+	}
 }

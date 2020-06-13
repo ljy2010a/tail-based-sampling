@@ -21,25 +21,31 @@ type ChannelGroupConsume struct {
 	blockLen     int
 	lineBlock    []byte
 	scannerBlock []byte
+	posSlice     chan []int
 }
 
 func NewChannelGroupConsume(receiver *Receiver, readDone func(), over func()) *ChannelGroupConsume {
 	// 500w = 1450MB
-	blockLen := int(2 * 1024 * 1024 * 1024)
+	blockLen := int(2.5 * 1024 * 1024 * 1024)
 	readBufSize := 64 * 1024 * 1024
-	return &ChannelGroupConsume{
+	c := &ChannelGroupConsume{
 		receiver:     receiver,
 		logger:       receiver.logger,
-		lineChan:     make(chan []int, 100),
-		lineGroupNum: 100000,
+		lineChan:     make(chan []int, 50),
+		lineGroupNum: 200000,
 		readBufSize:  readBufSize,
 		workNum:      2,
 		readDoneFunc: readDone,
 		overFunc:     over,
 		blockLen:     blockLen,
 		lineBlock:    make([]byte, blockLen),
+		posSlice:     make(chan []int, 100),
 		//scannerBlock: make([]byte, blockLen),
 	}
+	for i := 0; i < 100; i++ {
+		c.posSlice <- make([]int, c.lineGroupNum)
+	}
+	return c
 }
 
 func (c *ChannelGroupConsume) Read(rd io.Reader) {
@@ -98,7 +104,11 @@ func (c *ChannelGroupConsume) Read(rd io.Reader) {
 
 		if i == iLimit {
 			c.lineChan <- lines
-			lines = make([]int, c.lineGroupNum)
+			select {
+			case lines = <-c.posSlice:
+			default:
+				lines = make([]int, c.lineGroupNum)
+			}
 			i = 0
 			continue
 		}
