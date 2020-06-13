@@ -130,7 +130,7 @@ func (r *Receiver) Run() {
 
 	r.idToTrace = common.NewTDataMap()
 
-	r.deleteChan = make(chan string, 8000)
+	r.deleteChan = make(chan string, 4000)
 	r.finishChan = make(chan interface{})
 	doneFunc := func() {
 	}
@@ -218,7 +218,7 @@ func (r *Receiver) QueryWrongHandler(ctx *fasthttp.RequestCtx) {
 
 func (r *Receiver) ConsumeByte(lines []int) {
 	idToSpans := make(map[string]*common.TData, 800)
-	for _, val := range lines {
+	for i, val := range lines {
 		start := val >> 16
 		llen := val & 0xffff
 		line := r.consumer.lineBlock[start : start+llen]
@@ -226,14 +226,13 @@ func (r *Receiver) ConsumeByte(lines []int) {
 		id := GetTraceIdByString(line)
 		if etd, ok := idToSpans[id]; !ok {
 			td := &common.TData{
-				//Source: r.HttpPort,
-				Sbi:   make([]int, 0, 50),
+				Sbi:   make([]int, 0, 60),
 				Wrong: IfSpanWrongString(line),
 				//Wrong:  wrong,
 			}
-			//if i > 2_0000 && i < 18_0000 {
-			//	td.Status = common.TraceStatusSkip
-			//}
+			if i > 2_0000 && i < 8_0000 {
+				td.Status = common.TraceStatusSkip
+			}
 			//td.Id = id
 			td.Sbi = append(td.Sbi, val)
 			idToSpans[id] = td
@@ -265,23 +264,23 @@ func (r *Receiver) ConsumeByte(lines []int) {
 			}
 			continue
 		}
-		//if td.Status == common.TraceStatusSkip {
-		//	r.dropTrace(td.Id, td, "0")
-		//} else {
-		postDeletion := false
-		for !postDeletion {
-			select {
-			case r.deleteChan <- id:
-				postDeletion = true
-			default:
-				//<-r.deleteChan
-				dropId, ok := <-r.deleteChan
-				if ok {
-					r.dropTraceById(dropId, "0")
+		if td.Status == common.TraceStatusSkip {
+			r.dropTrace(id, td, "0")
+		} else {
+			postDeletion := false
+			for !postDeletion {
+				select {
+				case r.deleteChan <- id:
+					postDeletion = true
+				default:
+					//<-r.deleteChan
+					dropId, ok := <-r.deleteChan
+					if ok {
+						r.dropTraceById(dropId, "0")
+					}
 				}
 			}
 		}
-		//}
 	}
 }
 

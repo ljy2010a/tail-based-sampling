@@ -39,14 +39,14 @@ type TData struct {
 	Wrong  bool
 	Status uint8
 	Sbi    []int
-	sync.Mutex
+	//sync.Mutex
 }
 
-func (m *TData) AddSpani(newSpans []int) {
-	m.Lock()
-	m.Sbi = append(m.Sbi, newSpans...)
-	m.Unlock()
-}
+//func (m *TData) AddSpani(newSpans []int) {
+//	m.Lock()
+//	m.Sbi = append(m.Sbi, newSpans...)
+//	m.Unlock()
+//}
 
 type TDataMapShard struct {
 	mu    sync.RWMutex
@@ -76,15 +76,17 @@ func (t *TDataMapShard) Load(id string) (*TData, bool) {
 	}
 }
 
+const shardNum = 128
+
 func NewTDataMap() *TDataMap {
-	m := TDataMap{shards: make([]*TDataMapShard, 256)}
-	for i := 0; i < 256; i++ {
+	m := &TDataMap{shards: make([]*TDataMapShard, shardNum)}
+	for i := 0; i < shardNum; i++ {
 		m.shards[i] = &TDataMapShard{
-			tdMap: make(map[string]*TData, 4000),
+			tdMap: make(map[string]*TData, 8000),
 			mu:    sync.RWMutex{},
 		}
 	}
-	return &m
+	return m
 }
 
 type TDataMap struct {
@@ -92,19 +94,20 @@ type TDataMap struct {
 }
 
 func (t *TDataMap) Load(id string) (*TData, bool) {
-	shard := t.shards[uint(fnv32(id))%uint(256)]
+	shard := t.shards[uint(fnv32(id))%uint(shardNum)]
 	return shard.Load(id)
 }
 
 func (t *TDataMap) LoadOrStore(id string, val *TData) (*TData, bool) {
-	shard := t.shards[uint(fnv32(id))%uint(256)]
+	shard := t.shards[uint(fnv32(id))%uint(shardNum)]
 	return shard.LoadOrStore(id, val)
 }
+
+const prime32 = uint32(16777619)
 
 // FNV hash
 func fnv32(key string) uint32 {
 	hash := uint32(2166136261)
-	const prime32 = uint32(16777619)
 	for i := 0; i < len(key); i++ {
 		hash *= prime32
 		hash ^= uint32(key[i])
