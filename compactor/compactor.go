@@ -26,9 +26,8 @@ type Compactor struct {
 	finishChan  chan interface{}
 	checkSumMap map[string]string
 	closeTimes  int64
-	//resultChan  chan string
-	idToTrace sync.Map
-	startTime time.Time
+	idToTrace   sync.Map
+	startTime   time.Time
 }
 
 func (r *Compactor) Run() {
@@ -131,7 +130,6 @@ func (r *Compactor) SetWrongHandler(ctx *fasthttp.RequestCtx) {
 
 	tdi, exist := r.idToTrace.LoadOrStore(td.Id, td)
 	if !exist {
-		//r.resultChan <- td.Id
 		// notify another
 		anotherPort := "8000"
 		if td.Source == "8000" {
@@ -152,6 +150,7 @@ func (r *Compactor) SetWrongHandler(ctx *fasthttp.RequestCtx) {
 			return
 		}
 		otd.AddSpan(td.Sb)
+		//otd.Sb = append(otd.Sb, td.Sb...)
 		otd.Md5 = CompactMd5(otd)
 	}
 	ctx.SetStatusCode(http.StatusOK)

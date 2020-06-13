@@ -238,14 +238,14 @@ func (r *Receiver) QueryWrongHandler(ctx *fasthttp.RequestCtx) {
 			//b, _ := ltd.Marshal()
 			if over == "1" {
 				//SendWrongRequestB(ltd, r.CompactorSetWrongUrl, b, "", nil)
-				SendWrongRequest(ltd, r.CompactorSetWrongUrl, "", nil)
+				SendWrongRequest(ltd, r.CompactorSetWrongUrl, "", nil, r.consumer.lineBlock)
 			} else {
 				//reqPool.Submit(func() {
 				//	SendWrongRequest(ltd, r.CompactorSetWrongUrl, over, &r.overWg)
 				//})
 				go func() {
 					//SendWrongRequestB(ltd, r.CompactorSetWrongUrl, b, "", nil)
-					SendWrongRequest(ltd, r.CompactorSetWrongUrl, "", nil)
+					SendWrongRequest(ltd, r.CompactorSetWrongUrl, "", nil, r.consumer.lineBlock)
 				}()
 			}
 		}
@@ -276,24 +276,23 @@ func (r *Receiver) QueryWrongHandler(ctx *fasthttp.RequestCtx) {
 	return
 }
 
-func (r *Receiver) ConsumeByte(lines [][]byte) {
+func (r *Receiver) ConsumeByte(lines []int) {
 	idToSpans := make(map[string]*common.TraceData, 800)
-	for i := range lines {
-		line := lines[i]
+	for _, val := range lines {
+		start := val >> 16
+		llen := val & 0xffff
+		line := r.consumer.lineBlock[start : start+llen]
 		//id, wrong := GetTraceIdWrongByString(line)
 		id := GetTraceIdByString(line)
 		if etd, ok := idToSpans[id]; !ok {
-			//tdi := r.tdPool.Get()
-			//td := tdi.(*common.TraceData)
-			//td.Wrong = IfSpanWrong(line)
 			td := &common.TraceData{
 				Source: r.HttpPort,
-				Sb:     make([][]byte, 0, 50),
+				Sbi:    make([]int, 0, 50),
 				Wrong:  IfSpanWrongString(line),
 				//Wrong:  wrong,
 			}
 			td.Id = id
-			td.Sb = append(td.Sb, line)
+			td.Sbi = append(td.Sbi, val)
 			idToSpans[id] = td
 		} else {
 			if !etd.Wrong && IfSpanWrongString(line) {
@@ -302,7 +301,7 @@ func (r *Receiver) ConsumeByte(lines [][]byte) {
 			//if !etd.Wrong && wrong {
 			//	etd.Wrong = true
 			//}
-			etd.Sb = append(etd.Sb, line)
+			etd.Sbi = append(etd.Sbi, val)
 		}
 	}
 
@@ -321,13 +320,11 @@ func (r *Receiver) ConsumeByte(lines [][]byte) {
 				r.logger.Info("t not exist ", zap.String("id", id))
 			} else {
 				td := tdi.(*common.TraceData)
-				td.AddSpan(etd.Sb)
+				td.AddSpani(etd.Sbi)
 				if !td.Wrong && etd.Wrong {
 					td.Wrong = true
 				}
 			}
-			//etd.Clear()
-			//r.tdPool.Put(etd)
 		} else {
 			postDeletion := false
 			for !postDeletion {
@@ -376,7 +373,7 @@ func (r *Receiver) dropTrace(id string, over string) {
 		//reqPool.Submit(func() {
 		//	SendWrongRequest(td, r.CompactorSetWrongUrl, over, &r.overWg)
 		//})
-		go SendWrongRequest(td, r.CompactorSetWrongUrl, over, &r.overWg)
+		go SendWrongRequest(td, r.CompactorSetWrongUrl, over, &r.overWg, r.consumer.lineBlock)
 		return
 	} else {
 		td.Status = common.TraceStatusDone

@@ -346,14 +346,56 @@ func (b *Reader) ReadSlice(delim byte) (line []byte, err error) {
 		if i := bytes.IndexByte(b.buf[b.r+s:b.w], delim); i >= 0 {
 			i += s
 			line = b.buf[b.r : b.r+i+1]
-			//fmt.Println(b.r, b.r+i+1)
 			b.r += i + 1
 			break
 		}
 
 		// Pending error?
 		if b.err != nil {
-			line = b.buf[b.r:b.w]
+			//line = b.buf[b.r:b.w]
+			b.r = b.w
+			err = b.readErr()
+			break
+		}
+
+		//// Buffer full?
+		//if b.Buffered() >= len(b.buf) {
+		//	b.r = b.w
+		//	line = b.buf
+		//	err = ErrBufferFull
+		//	break
+		//}
+
+		s = b.w - b.r // do not rescan area we scanned before
+
+		b.fill() // buffer is not full
+	}
+
+	// Handle last byte, if any.
+	//if i := len(line) - 1; i >= 0 {
+	//	b.lastByte = int(line[i])
+	//	b.lastRuneSize = -1
+	//}
+
+	return
+}
+
+func (b *Reader) ReadSlicePos(delim byte) (start, llen int, err error) {
+	s := 0 // search start index
+	for {
+		// Search buffer.
+		if i := bytes.IndexByte(b.buf[b.r+s:b.w], delim); i >= 0 {
+			i += s
+			//line = b.buf[b.r : b.r+i+1]
+			start = b.r
+			llen = i + 1
+			b.r += i + 1
+			break
+		}
+
+		// Pending error?
+		if b.err != nil {
+			//line = b.buf[b.r:b.w]
 			b.r = b.w
 			err = b.readErr()
 			break

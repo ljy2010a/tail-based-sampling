@@ -50,11 +50,18 @@ func SendWrongRequestB(td *common.TraceData, reqUrl string, b []byte, over strin
 
 }
 
-func SendWrongRequest(td *common.TraceData, reqUrl string, over string, wg *sync.WaitGroup) {
+func SendWrongRequest(td *common.TraceData, reqUrl string, over string, wg *sync.WaitGroup, block []byte) {
 
 	if over == "1" {
 		wg.Add(1)
 		defer wg.Done()
+	}
+
+	td.Sb = make([][]byte, len(td.Sbi))
+	for i, val := range td.Sbi {
+		start := val >> 16
+		llen := val & 0xffff
+		td.Sb[i] = block[start : start+llen]
 	}
 
 	b, _ := td.Marshal()

@@ -1,7 +1,9 @@
 package receiver
 
 import (
+	"github.com/ljy2010a/tailf-based-sampling/common"
 	"math/rand"
+	"regexp"
 	"testing"
 	"time"
 )
@@ -144,4 +146,41 @@ func BenchmarkGroupByte(b *testing.B) {
 		GetTraceIdByByte(s)
 		IfSpanWrongByte(s)
 	}
+}
+
+func BenchmarkREGroupByte(b *testing.B) {
+	s := []byte("1d37a8b17db8568b|1589285985482007|3d1e7e1147c1895d|1d37a8b17db8568b|1259|InventoryCenter|/api/traces|192.168.0.2|http.status_code=200&http.url=http://tracing.console.aliyun.com/getOrder&component=java-web-servlet&span.kind=server&http.method=GET")
+	b.ResetTimer()
+	b.ReportAllocs()
+	for n := 0; n < b.N; n++ {
+		GetTraceIdByByte(s)
+		ReSpanWrongString(s)
+	}
+}
+
+var re1 = regexp.MustCompile("error=1")
+var re2 = regexp.MustCompile("http.status_code=")
+
+func ReSpanWrongString(line []byte) bool {
+	l := common.BytesToString(line)
+	//if strings.Contains(l, "error=1") {
+	//	return true
+	//}
+
+	if re1.MatchString(l) {
+		return true
+	}
+
+	//if re2.Match(line) {
+	//	return true
+	//}
+
+	//pos := strings.Index(l, "http.status_code=")
+	//if pos == -1 {
+	//	return false
+	//}
+	//if l[pos+17:pos+20] != "200" {
+	//	return true
+	//}
+	return false
 }

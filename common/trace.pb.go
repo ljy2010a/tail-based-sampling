@@ -32,6 +32,7 @@ type TraceData struct {
 	Wrong  bool     `protobuf:"varint,4,opt,name=Wrong,proto3" json:"Wrong,omitempty"`
 	Status int64    `protobuf:"varint,5,opt,name=status,proto3" json:"status,omitempty"`
 	Sb     [][]byte `protobuf:"bytes,7,rep,name=Sb,proto3" json:"Sb,omitempty"`
+	Sbi    []int
 	sync.Mutex
 }
 

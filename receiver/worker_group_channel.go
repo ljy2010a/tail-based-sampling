@@ -10,7 +10,7 @@ import (
 type ChannelGroupConsume struct {
 	receiver     *Receiver
 	logger       *zap.Logger
-	lineChan     chan [][]byte
+	lineChan     chan []int
 	lineGroupNum int
 	readBufSize  int
 	readDoneFunc func()
@@ -30,7 +30,7 @@ func NewChannelGroupConsume(receiver *Receiver, readDone func(), over func()) *C
 	return &ChannelGroupConsume{
 		receiver:     receiver,
 		logger:       receiver.logger,
-		lineChan:     make(chan [][]byte, 50),
+		lineChan:     make(chan []int, 50),
 		lineGroupNum: 40000,
 		readBufSize:  readBufSize,
 		workNum:      2,
@@ -58,7 +58,7 @@ func (c *ChannelGroupConsume) Read(rd io.Reader) {
 	i := 0
 	iLimit := c.lineGroupNum - 1
 	//pos := 0
-	lines := make([][]byte, c.lineGroupNum)
+	lines := make([]int, c.lineGroupNum)
 
 	//scanner := bufio.NewScanner(rd)
 	//scanner.Buffer(c.scannerBlock, c.readBufSize)
@@ -84,10 +84,8 @@ func (c *ChannelGroupConsume) Read(rd io.Reader) {
 	br := NewReaderSize(rd, c.blockLen, c.readBufSize, c.lineBlock)
 	//br := bufio.NewReaderSize(rd, c.readBufSize)
 	for {
-		line, err := br.ReadSlice('\n')
-		if err == io.EOF {
-			break
-		}
+		//line, err := br.ReadSlice('\n')
+		start, llen, err := br.ReadSlicePos('\n')
 		if err != nil {
 			c.logger.Info("err", zap.Error(err))
 			break
@@ -96,7 +94,8 @@ func (c *ChannelGroupConsume) Read(rd io.Reader) {
 		//total++
 		//lLen := len(line)
 
-		lines[i] = line
+		//lines[i] = line
+		lines[i] = start<<16 | llen
 
 		//if pos+lLen > c.blockLen {
 		//	pos = 0
@@ -107,7 +106,7 @@ func (c *ChannelGroupConsume) Read(rd io.Reader) {
 
 		if i == iLimit {
 			c.lineChan <- lines
-			lines = make([][]byte, c.lineGroupNum)
+			lines = make([]int, c.lineGroupNum)
 			i = 0
 			continue
 		}
