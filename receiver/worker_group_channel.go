@@ -31,18 +31,18 @@ func NewChannelGroupConsume(receiver *Receiver, readDone func(), over func()) *C
 	c := &ChannelGroupConsume{
 		receiver:     receiver,
 		logger:       receiver.logger,
-		lineChan:     make(chan []int, 50),
-		lineGroupNum: 200000,
+		lineChan:     make(chan []int, 40),
+		lineGroupNum: 250000,
 		readBufSize:  readBufSize,
 		workNum:      2,
 		readDoneFunc: readDone,
 		overFunc:     over,
 		blockLen:     blockLen,
 		lineBlock:    make([]byte, blockLen),
-		posSlice:     make(chan []int, 100),
+		posSlice:     make(chan []int, 80),
 		//scannerBlock: make([]byte, blockLen),
 	}
-	for i := 0; i < 100; i++ {
+	for i := 0; i < 80; i++ {
 		c.posSlice <- make([]int, c.lineGroupNum)
 	}
 	return c

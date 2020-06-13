@@ -187,21 +187,17 @@ func (r *Receiver) QueryWrongHandler(ctx *fasthttp.RequestCtx) {
 		Sbi:    make([]int, 0, 60),
 	}
 	ltd, lexist := r.idToTrace.LoadOrStore(id, td)
-	//ltd, lexist := r.idToTrace.Load(id)
 	if lexist {
 		ltd.Wrong = true
 		if ltd.Status == common.TraceStatusDone {
 			ltd.Status = common.TraceStatusSended
-			//b, _ := ltd.Marshal()
 			if over == "1" {
-				//SendWrongRequestB(ltd, r.CompactorSetWrongUrl, b, "", nil)
 				r.SendWrongRequest(id, ltd, r.CompactorSetWrongUrl, "")
 			} else {
 				//reqPool.Submit(func() {
-				//	SendWrongRequest(ltd, r.CompactorSetWrongUrl, over, &r.overWg)
+				//	r.SendWrongRequest(id, ltd, r.CompactorSetWrongUrl, "")
 				//})
 				go func() {
-					//SendWrongRequestB(ltd, r.CompactorSetWrongUrl, b, "", nil)
 					r.SendWrongRequest(id, ltd, r.CompactorSetWrongUrl, "")
 				}()
 			}
@@ -225,7 +221,7 @@ func (r *Receiver) ConsumeByte(lines []int) {
 				Wrong: IfSpanWrongString(line),
 				//Wrong:  wrong,
 			}
-			if i > 2_0000 && i < 18_0000 {
+			if i > 2_0000 && i < 23_0000 {
 				td.Status = common.TraceStatusSkip
 			}
 			td.Sbi = append(td.Sbi, val)
@@ -305,7 +301,7 @@ func (r *Receiver) dropTrace(id string, td *common.TData, over string) {
 	if wrong && td.Status != common.TraceStatusSended {
 		td.Status = common.TraceStatusSended
 		//reqPool.Submit(func() {
-		//	SendWrongRequest(td, r.CompactorSetWrongUrl, over, &r.overWg)
+		//	r.SendWrongRequest(id, td, r.CompactorSetWrongUrl, over)
 		//})
 		go r.SendWrongRequest(id, td, r.CompactorSetWrongUrl, over)
 		return
