@@ -25,12 +25,12 @@ type ChannelGroupConsume struct {
 
 func NewChannelGroupConsume(receiver *Receiver, readDone func(), over func()) *ChannelGroupConsume {
 	// 500w = 1450MB
-	blockLen := int(1.5 * 1024 * 1024 * 1024)
+	blockLen := int(2 * 1024 * 1024 * 1024)
 	readBufSize := 64 * 1024 * 1024
 	return &ChannelGroupConsume{
 		receiver:     receiver,
 		logger:       receiver.logger,
-		lineChan:     make(chan []int, 50),
+		lineChan:     make(chan []int, 100),
 		lineGroupNum: 40000,
 		readBufSize:  readBufSize,
 		workNum:      2,
@@ -57,7 +57,6 @@ func (c *ChannelGroupConsume) Read(rd io.Reader) {
 	minLine := 0
 	i := 0
 	iLimit := c.lineGroupNum - 1
-	//pos := 0
 	lines := make([]int, c.lineGroupNum)
 
 	//scanner := bufio.NewScanner(rd)
@@ -96,13 +95,6 @@ func (c *ChannelGroupConsume) Read(rd io.Reader) {
 
 		//lines[i] = line
 		lines[i] = start<<16 | llen
-
-		//if pos+lLen > c.blockLen {
-		//	pos = 0
-		//}
-		//copy(c.lineBlock[pos:], line)
-		//lines[i] = c.lineBlock[pos : pos+lLen]
-		//pos += lLen
 
 		if i == iLimit {
 			c.lineChan <- lines

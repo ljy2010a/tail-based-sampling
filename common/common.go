@@ -87,10 +87,10 @@ func (m *TData) AddSpani(newSpans []int) {
 
 type TDataMapShard struct {
 	mu    sync.RWMutex
-	tdMap map[string]*TraceData
+	tdMap map[string]*TData
 }
 
-func (t *TDataMapShard) LoadOrStore(id string, val *TraceData) (*TraceData, bool) {
+func (t *TDataMapShard) LoadOrStore(id string, val *TData) (*TData, bool) {
 	t.mu.Lock()
 	if v, ok := t.tdMap[id]; ok {
 		t.mu.Unlock()
@@ -102,7 +102,7 @@ func (t *TDataMapShard) LoadOrStore(id string, val *TraceData) (*TraceData, bool
 	}
 }
 
-func (t *TDataMapShard) Load(id string) (*TraceData, bool) {
+func (t *TDataMapShard) Load(id string) (*TData, bool) {
 	t.mu.RLock()
 	if v, ok := t.tdMap[id]; ok {
 		t.mu.RUnlock()
@@ -117,7 +117,7 @@ func NewTDataMap() *TDataMap {
 	m := TDataMap{shards: make([]*TDataMapShard, 256)}
 	for i := 0; i < 256; i++ {
 		m.shards[i] = &TDataMapShard{
-			tdMap: make(map[string]*TraceData, 4000),
+			tdMap: make(map[string]*TData, 4000),
 			mu:    sync.RWMutex{},
 		}
 	}
@@ -128,12 +128,12 @@ type TDataMap struct {
 	shards []*TDataMapShard
 }
 
-func (t *TDataMap) Load(id string) (*TraceData, bool) {
+func (t *TDataMap) Load(id string) (*TData, bool) {
 	shard := t.shards[uint(fnv32(id))%uint(256)]
 	return shard.Load(id)
 }
 
-func (t *TDataMap) LoadOrStore(id string, val *TraceData) (*TraceData, bool) {
+func (t *TDataMap) LoadOrStore(id string, val *TData) (*TData, bool) {
 	shard := t.shards[uint(fnv32(id))%uint(256)]
 	return shard.LoadOrStore(id, val)
 }

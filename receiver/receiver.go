@@ -184,6 +184,14 @@ func (r *Receiver) QueryWrongHandler(ctx *fasthttp.RequestCtx) {
 	//		zap.String("id", id),
 	//	)
 	//}
+	//td := &common.TraceData{
+	//	Id:     id,
+	//	Source: r.HttpPort,
+	//	Md5:    "",
+	//	Wrong:  true,
+	//	Sbi:    make([]int, 60),
+	//}
+	//ltd, lexist := r.idToTrace.LoadOrStore(id, td)
 	ltd, lexist := r.idToTrace.Load(id)
 	if lexist {
 		ltd.Wrong = true
@@ -192,14 +200,14 @@ func (r *Receiver) QueryWrongHandler(ctx *fasthttp.RequestCtx) {
 			//b, _ := ltd.Marshal()
 			if over == "1" {
 				//SendWrongRequestB(ltd, r.CompactorSetWrongUrl, b, "", nil)
-				SendWrongRequest(ltd, r.CompactorSetWrongUrl, "", nil, r.consumer.lineBlock)
+				r.SendWrongRequest(id, ltd, r.CompactorSetWrongUrl, "")
 			} else {
 				//reqPool.Submit(func() {
 				//	SendWrongRequest(ltd, r.CompactorSetWrongUrl, over, &r.overWg)
 				//})
 				go func() {
 					//SendWrongRequestB(ltd, r.CompactorSetWrongUrl, b, "", nil)
-					SendWrongRequest(ltd, r.CompactorSetWrongUrl, "", nil, r.consumer.lineBlock)
+					r.SendWrongRequest(id, ltd, r.CompactorSetWrongUrl, "")
 				}()
 			}
 		}
@@ -209,7 +217,7 @@ func (r *Receiver) QueryWrongHandler(ctx *fasthttp.RequestCtx) {
 }
 
 func (r *Receiver) ConsumeByte(lines []int) {
-	idToSpans := make(map[string]*common.TraceData, 800)
+	idToSpans := make(map[string]*common.TData, 800)
 	for _, val := range lines {
 		start := val >> 16
 		llen := val & 0xffff
@@ -217,13 +225,16 @@ func (r *Receiver) ConsumeByte(lines []int) {
 		//id, wrong := GetTraceIdWrongByString(line)
 		id := GetTraceIdByString(line)
 		if etd, ok := idToSpans[id]; !ok {
-			td := &common.TraceData{
-				Source: r.HttpPort,
-				Sbi:    make([]int, 0, 50),
-				Wrong:  IfSpanWrongString(line),
+			td := &common.TData{
+				//Source: r.HttpPort,
+				Sbi:   make([]int, 0, 50),
+				Wrong: IfSpanWrongString(line),
 				//Wrong:  wrong,
 			}
-			td.Id = id
+			//if i > 2_0000 && i < 18_0000 {
+			//	td.Status = common.TraceStatusSkip
+			//}
+			//td.Id = id
 			td.Sbi = append(td.Sbi, val)
 			idToSpans[id] = td
 		} else {
@@ -251,32 +262,30 @@ func (r *Receiver) ConsumeByte(lines []int) {
 			if !td.Wrong && etd.Wrong {
 				td.Wrong = true
 			}
-		} else {
-			postDeletion := false
-			for !postDeletion {
-				select {
-				case r.deleteChan <- id:
-					postDeletion = true
-				default:
-					//<-r.deleteChan
-					dropId, ok := <-r.deleteChan
-					if ok {
-						r.dropTrace(dropId, "0")
-					}
+			continue
+		}
+		//if td.Status == common.TraceStatusSkip {
+		//	r.dropTrace(td.Id, td, "0")
+		//} else {
+		postDeletion := false
+		for !postDeletion {
+			select {
+			case r.deleteChan <- id:
+				postDeletion = true
+			default:
+				//<-r.deleteChan
+				dropId, ok := <-r.deleteChan
+				if ok {
+					r.dropTraceById(dropId, "0")
 				}
 			}
 		}
+		//}
 	}
 }
 
-func (r *Receiver) dropTrace(id string, over string) {
+func (r *Receiver) dropTrace(id string, td *common.TData, over string) {
 	atomic.AddInt64(&r.traceNums, 1)
-
-	td, ok := r.idToTrace.Load(id)
-	if !ok {
-		r.logger.Info("drop id not exist", zap.String("id", id))
-		return
-	}
 	//td := d.(*common.TraceData)
 	//spLen := len(td.Sb)
 	//if r.maxSpanNums < spLen {
@@ -287,7 +296,7 @@ func (r *Receiver) dropTrace(id string, over string) {
 	//}
 	wrong := td.Wrong
 	if !wrong {
-		_, ok := r.wrongIdMap.Load(td.Id)
+		_, ok := r.wrongIdMap.Load(id)
 		if ok {
 			wrong = true
 			r.wrongHit++
@@ -299,11 +308,20 @@ func (r *Receiver) dropTrace(id string, over string) {
 		//reqPool.Submit(func() {
 		//	SendWrongRequest(td, r.CompactorSetWrongUrl, over, &r.overWg)
 		//})
-		go SendWrongRequest(td, r.CompactorSetWrongUrl, over, &r.overWg, r.consumer.lineBlock)
+		go r.SendWrongRequest(id, td, r.CompactorSetWrongUrl, over)
 		return
 	} else {
 		td.Status = common.TraceStatusDone
 	}
+}
+
+func (r *Receiver) dropTraceById(id string, over string) {
+	td, ok := r.idToTrace.Load(id)
+	if !ok {
+		r.logger.Info("drop id not exist", zap.String("id", id))
+		return
+	}
+	r.dropTrace(id, td, over)
 }
 
 func (r *Receiver) finish() {
@@ -323,7 +341,7 @@ func (r *Receiver) finish() {
 			for {
 				select {
 				case dropId := <-r.deleteChan:
-					r.dropTrace(dropId, "1")
+					r.dropTraceById(dropId, "1")
 				default:
 					ftime = time.Since(btime)
 					return
@@ -433,4 +451,22 @@ func IfSpanWrongString(line []byte) bool {
 		return true
 	}
 	return false
+
+	//l := common.BytesToString(line)
+	//if strings.Contains(l, "error=1") {
+	//	return true
+	//}
+	//pos := strings.Index(l, "http.status_code=")
+	//if pos == -1 {
+	//	//if strings.Contains(l, "error=1") {
+	//	//	return true
+	//	//}
+	//	return false
+	//}
+	////return !strings.EqualFold(l[pos+17:pos+20], "200")
+	//
+	//if l[pos+17:pos+20] != "200" {
+	//	return true
+	//}
+	//return false
 }
