@@ -78,6 +78,7 @@ func (t *TDataMapShard) Load(id string) (*TData, bool) {
 }
 
 const shardNum = 128
+const shardNum1 = shardNum - 1
 
 func NewTDataMap() *TDataMap {
 	m := &TDataMap{shards: make([]*TDataMapShard, shardNum)}
@@ -95,16 +96,20 @@ type TDataMap struct {
 }
 
 func (t *TDataMap) Load(id string) (*TData, bool) {
+	//shard := t.shards[fnv64(id)&shardNum1]
 	shard := t.shards[uint(fnv32(id))%uint(shardNum)]
 	return shard.Load(id)
 }
 
 func (t *TDataMap) LoadOrStore(id string, val *TData) (*TData, bool) {
+	//shard := t.shards[fnv64(id)&shardNum1]
 	shard := t.shards[uint(fnv32(id))%uint(shardNum)]
 	return shard.LoadOrStore(id, val)
 }
 
+//
 const prime32 = uint32(16777619)
+const offset = uint32(2166136261)
 
 // FNV hash
 func fnv32(key string) uint32 {
@@ -112,6 +117,23 @@ func fnv32(key string) uint32 {
 	for i := 0; i < len(key); i++ {
 		hash *= prime32
 		hash ^= uint32(key[i])
+	}
+	return hash
+}
+
+const (
+	// offset64 FNVa offset basis. See https://en.wikipedia.org/wiki/Fowler–Noll–Vo_hash_function#FNV-1a_hash
+	offset64 = 14695981039346656037
+	// prime64 FNVa prime value. See https://en.wikipedia.org/wiki/Fowler–Noll–Vo_hash_function#FNV-1a_hash
+	prime64 = 1099511628211
+)
+
+// Sum64 gets the string and returns its uint64 hash value.
+func fnv64(key string) uint {
+	var hash uint = offset64
+	for i := 0; i < len(key); i++ {
+		hash ^= uint(key[i])
+		hash *= prime64
 	}
 	return hash
 }
