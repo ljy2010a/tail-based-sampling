@@ -39,6 +39,7 @@ type Receiver struct {
 	traceMiss   int
 	traceSkip   int
 	wrongHit    int
+	tdSlice     chan *common.TData
 }
 
 func (r *Receiver) Run() {
@@ -125,6 +126,14 @@ func (r *Receiver) Run() {
 	//	}
 	//}()
 
+	tdNums := 120_0000
+	tdSlice := make(chan *common.TData, tdNums)
+	for i := 0; i < tdNums; i++ {
+		tdSlice <- &common.TData{
+			Wrong: false,
+			Sbi:   make([]int, 0, 50),
+		}
+	}
 	r.idToTrace = common.NewTDataMap()
 
 	r.deleteChan = make(chan string, 6000)
@@ -192,11 +201,21 @@ func (r *Receiver) QueryWrongHandler(ctx *fasthttp.RequestCtx) {
 	//		zap.String("id", id),
 	//	)
 	//}
-	td := &common.TData{
-		Status: common.TraceStatusWrongSet,
-		Wrong:  true,
-		Sbi:    make([]int, 0, 64),
+	//td := &common.TData{
+	//	Status: common.TraceStatusWrongSet,
+	//	Wrong:  true,
+	//	Sbi:    make([]int, 0, 50),
+	//}
+	var td *common.TData
+	select {
+	case td = <-r.tdSlice:
+	default:
+		td = &common.TData{
+			Sbi: make([]int, 0, 50),
+		}
 	}
+	td.Wrong = true
+	td.Status = common.TraceStatusWrongSet
 	ltd, lexist := r.idToTrace.LoadOrStore(id, td)
 	if lexist {
 		ltd.Wrong = true
@@ -226,11 +245,15 @@ func (r *Receiver) ConsumeByte(lines []int, idToSpans map[string]*common.TData) 
 		//id, wrong := GetTraceIdWrongByString(line)
 		id := GetTraceIdByString(line)
 		if etd, ok := idToSpans[id]; !ok {
-			td := &common.TData{
-				Sbi:   make([]int, 0, 64),
-				Wrong: IfSpanWrongString(line),
-				//Wrong:  wrong,
+			var td *common.TData
+			select {
+			case td = <-r.tdSlice:
+			default:
+				td = &common.TData{
+					Sbi: make([]int, 0, 50),
+				}
 			}
+			td.Wrong = IfSpanWrongString(line)
 			if i > 2_0000 && i < 23_0000 {
 				td.Status = common.TraceStatusSkip
 			}
