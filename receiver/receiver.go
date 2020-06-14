@@ -141,7 +141,18 @@ func (r *Receiver) Run() {
 
 	frouter := fasthttprouter.New()
 	frouter.GET("/ready", func(ctx *fasthttp.RequestCtx) {
-		r.logger.Info("ReadyHandler", zap.String("port", r.HttpPort))
+		btime := time.Now()
+		wg := sync.WaitGroup{}
+		for i := 0; i < 500; i++ {
+			go r.warmUp(wg)
+		}
+		wg.Wait()
+		r.logger.Info("ReadyHandler done",
+			zap.String("port", r.HttpPort),
+			zap.Duration("cost", time.Since(btime)))
+		ctx.SetStatusCode(http.StatusOK)
+	})
+	frouter.GET("/warmup", func(ctx *fasthttp.RequestCtx) {
 		ctx.SetStatusCode(http.StatusOK)
 	})
 	frouter.GET("/setParameter", r.SetParamHandler)
@@ -184,7 +195,7 @@ func (r *Receiver) QueryWrongHandler(ctx *fasthttp.RequestCtx) {
 	td := &common.TData{
 		Status: common.TraceStatusWrongSet,
 		Wrong:  true,
-		Sbi:    make([]int, 0, 60),
+		Sbi:    make([]int, 0, 64),
 	}
 	ltd, lexist := r.idToTrace.LoadOrStore(id, td)
 	if lexist {
@@ -207,8 +218,7 @@ func (r *Receiver) QueryWrongHandler(ctx *fasthttp.RequestCtx) {
 	return
 }
 
-func (r *Receiver) ConsumeByte(lines []int) {
-	idToSpans := make(map[string]*common.TData, 1000)
+func (r *Receiver) ConsumeByte(lines []int, idToSpans map[string]*common.TData) {
 	for i, val := range lines {
 		start := val >> 16
 		llen := val & 0xffff
@@ -217,7 +227,7 @@ func (r *Receiver) ConsumeByte(lines []int) {
 		id := GetTraceIdByString(line)
 		if etd, ok := idToSpans[id]; !ok {
 			td := &common.TData{
-				Sbi:   make([]int, 0, 60),
+				Sbi:   make([]int, 0, 64),
 				Wrong: IfSpanWrongString(line),
 				//Wrong:  wrong,
 			}
@@ -243,6 +253,11 @@ func (r *Receiver) ConsumeByte(lines []int) {
 	//}
 
 	for id, etd := range idToSpans {
+		if etd.Status == common.TraceStatusSkip && etd.Wrong {
+			r.traceSkip++
+			r.dropTrace(id, etd, "0")
+			continue
+		}
 		td, exist := r.idToTrace.LoadOrStore(id, etd)
 		if exist {
 			// 已存在
@@ -269,14 +284,12 @@ func (r *Receiver) ConsumeByte(lines []int) {
 			case r.deleteChan <- id:
 				postDeletion = true
 			default:
-				//<-r.deleteChan
 				dropId, ok := <-r.deleteChan
 				if ok {
 					r.dropTraceById(dropId, "0")
 				}
 			}
 		}
-
 	}
 }
 

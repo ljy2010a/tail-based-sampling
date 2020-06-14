@@ -92,7 +92,21 @@ func (r *Compactor) Run() {
 
 	frouter := fasthttprouter.New()
 	frouter.GET("/ready", func(ctx *fasthttp.RequestCtx) {
-		r.logger.Info("ReadyHandler", zap.String("port", r.HttpPort))
+		btime := time.Now()
+		wg := sync.WaitGroup{}
+		for i := 0; i < 500; i++ {
+			go WarmUp("8000", wg)
+		}
+		for i := 0; i < 500; i++ {
+			go WarmUp("8001", wg)
+		}
+		wg.Wait()
+		r.logger.Info("ReadyHandler done",
+			zap.String("port", r.HttpPort),
+			zap.Duration("cost", time.Since(btime)))
+		ctx.SetStatusCode(http.StatusOK)
+	})
+	frouter.GET("/warmup", func(ctx *fasthttp.RequestCtx) {
 		ctx.SetStatusCode(http.StatusOK)
 	})
 	frouter.GET("/setParameter", r.SetParamHandler)
@@ -209,7 +223,6 @@ func (r *Compactor) finish() {
 	sb.WriteString("}")
 	btime = time.Now()
 	//r.logger.Info(sb.String())
-	//ReportCheckSum(r.checkSumMap, r.ReportUrl)
 	ReportCheckSumString(sb.String(), r.ReportUrl)
 	r.logger.Info("report checksum",
 		zap.Int("len", i),

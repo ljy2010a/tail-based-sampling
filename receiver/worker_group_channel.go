@@ -1,6 +1,7 @@
 package receiver
 
 import (
+	"github.com/ljy2010a/tailf-based-sampling/common"
 	"go.uber.org/zap"
 	"io"
 	"sync"
@@ -120,6 +121,7 @@ func (c *ChannelGroupConsume) Read(rd io.Reader) {
 	}
 	rtime := time.Since(btime)
 	ctime := time.Now()
+	clen := len(c.lineChan)
 	c.readDoneFunc()
 	close(c.lineChan)
 	c.doneWg.Wait()
@@ -127,6 +129,7 @@ func (c *ChannelGroupConsume) Read(rd io.Reader) {
 		zap.Duration("read cost", rtime),
 		zap.Duration("less cost", time.Since(ctime)),
 		zap.Duration("total cost", time.Since(btime)),
+		zap.Int("less count", clen),
 		zap.Int("maxLine", maxLine),
 		zap.Int("minLine", minLine),
 		zap.Int("total", total),
@@ -155,12 +158,16 @@ func (c *ChannelGroupConsume) consume() {
 	size := 0
 	wrong := 0
 	//once := sync.Once{}
+	idToSpans := make(map[string]*common.TData, 1024)
 	for lines := range c.lineChan {
 		//once.Do(func() {
 		//	btime = time.Now()
 		//})
 		//size += len(lines)
-		c.receiver.ConsumeByte(lines)
+		c.receiver.ConsumeByte(lines, idToSpans)
+		for k := range idToSpans {
+			delete(idToSpans, k)
+		}
 	}
 	c.logger.Info("deal file done ",
 		zap.Int("wrong", wrong),

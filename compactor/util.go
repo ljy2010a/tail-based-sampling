@@ -3,6 +3,7 @@ package compactor
 import (
 	"fmt"
 	"github.com/valyala/fasthttp"
+	"sync"
 	"time"
 )
 
@@ -19,6 +20,28 @@ var (
 //func init() {
 //	reqPool, _ = ants.NewPool(1000, ants.WithPreAlloc(true))
 //}
+
+func WarmUp(port string, wg sync.WaitGroup) {
+	wg.Add(1)
+	defer wg.Done()
+	notifyUrl := fmt.Sprintf("http://127.0.0.1:%s/warmup", port)
+
+	req := fasthttp.AcquireRequest()
+	defer fasthttp.ReleaseRequest(req)
+
+	req.SetRequestURI(notifyUrl)
+	req.Header.SetMethod("GET")
+
+	resp := fasthttp.AcquireResponse()
+	defer fasthttp.ReleaseResponse(resp)
+
+	if err := c.Do(req, resp); err != nil {
+		return
+	}
+	if resp.StatusCode() != fasthttp.StatusOK {
+		return
+	}
+}
 
 func NotifyAnotherWrong(reqUrl string) {
 	req := fasthttp.AcquireRequest()
