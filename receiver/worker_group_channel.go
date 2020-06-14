@@ -1,7 +1,6 @@
 package receiver
 
 import (
-	"github.com/ljy2010a/tailf-based-sampling/common"
 	"go.uber.org/zap"
 	"io"
 	"sync"
@@ -28,7 +27,7 @@ type ChannelGroupConsume struct {
 func NewChannelGroupConsume(receiver *Receiver, readDone func(), over func()) *ChannelGroupConsume {
 	// 500w = 1450MB
 	blockLen := int(2.5 * 1024 * 1024 * 1024)
-	readBufSize := 64 * 1024 * 1024
+	readBufSize := 128 * 1024 * 1024
 	c := &ChannelGroupConsume{
 		receiver:     receiver,
 		logger:       receiver.logger,
@@ -158,7 +157,7 @@ func (c *ChannelGroupConsume) consume() {
 	size := 0
 	wrong := 0
 	//once := sync.Once{}
-	idToSpans := make(map[string]*common.TData, 1024)
+	idToSpans := make(map[string]*TData, 1024)
 	for lines := range c.lineChan {
 		//once.Do(func() {
 		//	btime = time.Now()

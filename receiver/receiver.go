@@ -20,7 +20,7 @@ type Receiver struct {
 	CompactorPort        string // 8002
 	CompactorSetWrongUrl string
 	logger               *zap.Logger
-	idToTrace            *common.TDataMap
+	idToTrace            *TDataMap
 
 	deleteChan chan string
 	finishChan chan interface{}
@@ -39,7 +39,7 @@ type Receiver struct {
 	traceMiss   int
 	traceSkip   int
 	wrongHit    int
-	tdSlice     chan *common.TData
+	tdSlice     chan *TData
 }
 
 func (r *Receiver) Run() {
@@ -127,14 +127,11 @@ func (r *Receiver) Run() {
 	//}()
 
 	tdNums := 120_0000
-	tdSlice := make(chan *common.TData, tdNums)
+	tdSlice := make(chan *TData, tdNums)
 	for i := 0; i < tdNums; i++ {
-		tdSlice <- &common.TData{
-			Wrong: false,
-			Sbi:   make([]int, 0, 50),
-		}
+		tdSlice <- NewTData()
 	}
-	r.idToTrace = common.NewTDataMap()
+	r.idToTrace = NewTDataMap()
 
 	r.deleteChan = make(chan string, 6000)
 	r.finishChan = make(chan interface{})
@@ -206,13 +203,11 @@ func (r *Receiver) QueryWrongHandler(ctx *fasthttp.RequestCtx) {
 	//	Wrong:  true,
 	//	Sbi:    make([]int, 0, 50),
 	//}
-	var td *common.TData
+	var td *TData
 	select {
 	case td = <-r.tdSlice:
 	default:
-		td = &common.TData{
-			Sbi: make([]int, 0, 50),
-		}
+		td = NewTData()
 	}
 	td.Wrong = true
 	td.Status = common.TraceStatusWrongSet
@@ -237,7 +232,7 @@ func (r *Receiver) QueryWrongHandler(ctx *fasthttp.RequestCtx) {
 	return
 }
 
-func (r *Receiver) ConsumeByte(lines []int, idToSpans map[string]*common.TData) {
+func (r *Receiver) ConsumeByte(lines []int, idToSpans map[string]*TData) {
 	for i, val := range lines {
 		start := val >> 16
 		llen := val & 0xffff
@@ -245,13 +240,11 @@ func (r *Receiver) ConsumeByte(lines []int, idToSpans map[string]*common.TData) 
 		//id, wrong := GetTraceIdWrongByString(line)
 		id := GetTraceIdByString(line)
 		if etd, ok := idToSpans[id]; !ok {
-			var td *common.TData
+			var td *TData
 			select {
 			case td = <-r.tdSlice:
 			default:
-				td = &common.TData{
-					Sbi: make([]int, 0, 50),
-				}
+				td = NewTData()
 			}
 			td.Wrong = IfSpanWrongString(line)
 			if i > 2_0000 && i < 23_0000 {
@@ -316,7 +309,7 @@ func (r *Receiver) ConsumeByte(lines []int, idToSpans map[string]*common.TData) 
 	}
 }
 
-func (r *Receiver) dropTrace(id string, td *common.TData, over string) {
+func (r *Receiver) dropTrace(id string, td *TData, over string) {
 	atomic.AddInt64(&r.traceNums, 1)
 	//spLen := len(td.Sb)
 	//if r.maxSpanNums < spLen {
