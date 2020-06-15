@@ -233,6 +233,10 @@ func (r *Compactor) finish() {
 }
 
 func CompactMd5(td *common.TraceData) string {
+	//spans := make(common.Spans, len(td.Sb))
+	//for i, sb := range td.Sb {
+	//	spans[i] = ParseSpanData(sb)
+	//}
 	spans := common.Spans{}
 	for _, sb := range td.Sb {
 		spans = append(spans, ParseSpanData(sb))

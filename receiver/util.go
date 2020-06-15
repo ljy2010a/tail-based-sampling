@@ -23,7 +23,7 @@ var (
 //	reqPool, _ = ants.NewPool(1000, ants.WithPreAlloc(true))
 //}
 
-func (r *Receiver) SendWrongRequest(id string, td *TData, reqUrl string, over string) {
+func (r *Receiver) SendWrongRequest(id string, td *TData, over string) {
 
 	if over == "1" {
 		r.overWg.Add(1)
@@ -45,7 +45,7 @@ func (r *Receiver) SendWrongRequest(id string, td *TData, reqUrl string, over st
 	req := fasthttp.AcquireRequest()
 	defer fasthttp.ReleaseRequest(req)
 
-	req.SetRequestURI(reqUrl + fmt.Sprintf("?over=%s", over))
+	req.SetRequestURI(r.CompactorSetWrongUrl + fmt.Sprintf("?over=%s", over))
 	req.Header.SetMethod("POST")
 	req.Header.SetContentType("application/json")
 	req.SetBody(b)
@@ -54,11 +54,11 @@ func (r *Receiver) SendWrongRequest(id string, td *TData, reqUrl string, over st
 	defer fasthttp.ReleaseResponse(resp)
 
 	if err := c.Do(req, resp); err != nil {
-		fmt.Printf("set wrong fail id[%v] reqUrl[%v], err[%v] \n", id, reqUrl, err)
+		fmt.Printf("set wrong fail id[%v] err[%v] \n", id, err)
 		return
 	}
 	if resp.StatusCode() != fasthttp.StatusOK {
-		fmt.Printf("set wrong fail[%v] reqUrl[%v] code[%v]\n", id, reqUrl, resp.StatusCode())
+		fmt.Printf("set wrong fail[%v] code[%v]\n", id, resp.StatusCode())
 		return
 	}
 

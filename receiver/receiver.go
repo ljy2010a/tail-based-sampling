@@ -217,13 +217,13 @@ func (r *Receiver) QueryWrongHandler(ctx *fasthttp.RequestCtx) {
 		if ltd.Status == common.TraceStatusDone {
 			ltd.Status = common.TraceStatusSended
 			if over == "1" {
-				r.SendWrongRequest(id, ltd, r.CompactorSetWrongUrl, "")
+				r.SendWrongRequest(id, ltd, "")
 			} else {
 				//reqPool.Submit(func() {
 				//	r.SendWrongRequest(id, ltd, r.CompactorSetWrongUrl, "")
 				//})
 				go func() {
-					r.SendWrongRequest(id, ltd, r.CompactorSetWrongUrl, "")
+					r.SendWrongRequest(id, ltd, "")
 				}()
 			}
 		}
@@ -333,7 +333,7 @@ func (r *Receiver) dropTrace(id string, td *TData, over string) {
 		//reqPool.Submit(func() {
 		//	r.SendWrongRequest(id, td, r.CompactorSetWrongUrl, over)
 		//})
-		go r.SendWrongRequest(id, td, r.CompactorSetWrongUrl, over)
+		go r.SendWrongRequest(id, td, over)
 		return
 	} else {
 		td.Status = common.TraceStatusDone
