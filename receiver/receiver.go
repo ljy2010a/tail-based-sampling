@@ -247,6 +247,7 @@ func (r *Receiver) ConsumeByte(lines []int, idToSpans map[string]*TData) {
 				td = NewTData()
 			}
 			td.Wrong = IfSpanWrongString(line)
+			//td.Wrong = wrong
 			if i > 2_0000 && i < 23_0000 {
 				td.Status = common.TraceStatusSkip
 			}
@@ -401,18 +402,60 @@ func GetTraceIdWrongByString(line []byte) (string, bool) {
 	//id := common.BytesToString(line[:firstIdx])
 	l := common.BytesToString(line)
 	id := l[:strings.IndexByte(l, '|')]
-	if strings.Contains(l, "error=1") {
+	llen := len(l)
+	pos := strings.Index(l, "http.status_code=")
+	if pos == -1 {
+		//if strings.Contains(l, "error=1") {
+		//	return id, true
+		//}
+		if l[llen-7] != 'e' {
+			return id, false
+		}
+		if l[llen-6] != 'r' {
+			return id, false
+		}
+		if l[llen-5] != 'r' {
+			return id, false
+		}
+		if l[llen-4] != 'o' {
+			return id, false
+		}
+		if l[llen-3] != 'r' {
+			return id, false
+		}
+		if l[llen-2] != '=' {
+			return id, false
+		}
+		if l[llen-1] != '1' {
+			return id, false
+		}
 		return id, true
 	}
 
-	pos := strings.Index(l, "http.status_code=")
-	if pos == -1 {
-		return id, false
+	if l[pos+17] != '2' {
+		return id, true
 	}
-	if l[pos+17:pos+20] != "200" {
+	if l[pos+18] != '0' {
+		return id, true
+	}
+	if l[pos+19] != '0' {
 		return id, true
 	}
 	return id, false
+
+	//return id, !strings.EqualFold(l[pos+17:pos+20], "200")
+	//if strings.Contains(l, "error=1") {
+	//	return id, true
+	//}
+	//
+	//pos := strings.Index(l, "http.status_code=")
+	//if pos == -1 {
+	//	return id, false
+	//}
+	//if l[pos+17:pos+20] != "200" {
+	//	return id, true
+	//}
+	//return id, false
 }
 
 func GetTraceIdWrongByByte(line []byte) (string, bool) {
@@ -462,18 +505,49 @@ func IfSpanWrongString(line []byte) bool {
 	//return false
 
 	l := common.BytesToString(line)
+	llen := len(l)
 	//if strings.Contains(l, "error=1") {
 	//	return true
 	//}
 	pos := strings.Index(l, "http.status_code=")
 	if pos == -1 {
-		if strings.Contains(l, "error=1") {
-			return true
+		//if strings.Contains(l, "error=1") {
+		//	return true
+		//}
+		if l[llen-7] != 'e' {
+			return false
 		}
-		return false
+		if l[llen-6] != 'r' {
+			return false
+		}
+		if l[llen-5] != 'r' {
+			return false
+		}
+		if l[llen-4] != 'o' {
+			return false
+		}
+		if l[llen-3] != 'r' {
+			return false
+		}
+		if l[llen-2] != '=' {
+			return false
+		}
+		if l[llen-1] != '1' {
+			return false
+		}
+		return true
+		//return false
 	}
-	return !strings.EqualFold(l[pos+17:pos+20], "200")
-
+	if l[pos+17] != '2' {
+		return true
+	}
+	if l[pos+18] != '0' {
+		return true
+	}
+	if l[pos+19] != '0' {
+		return true
+	}
+	return false
 	//if l[pos+17:pos+20] != "200" {
 	//	return true
 	//}

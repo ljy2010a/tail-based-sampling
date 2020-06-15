@@ -95,9 +95,8 @@ func (c *ChannelGroupConsume) Read(rd io.Reader) {
 			c.logger.Info("err", zap.Error(err))
 			break
 		}
-		//size += len(line)
+		//size += llen
 		//total++
-		//lLen := len(line)
 
 		//lines[i] = line
 		lines[i] = start<<16 | llen
@@ -154,23 +153,18 @@ func (c *ChannelGroupConsume) consume() {
 	defer c.doneWg.Done()
 
 	btime := time.Now()
-	size := 0
-	wrong := 0
-	//once := sync.Once{}
+	once := sync.Once{}
 	idToSpans := make(map[string]*TData, 1024)
 	for lines := range c.lineChan {
-		//once.Do(func() {
-		//	btime = time.Now()
-		//})
-		//size += len(lines)
+		once.Do(func() {
+			btime = time.Now()
+		})
 		c.receiver.ConsumeByte(lines, idToSpans)
 		for k := range idToSpans {
 			delete(idToSpans, k)
 		}
 	}
 	c.logger.Info("deal file done ",
-		zap.Int("wrong", wrong),
-		zap.Int("dealSize", size),
 		zap.Duration("cost", time.Since(btime)),
 	)
 }

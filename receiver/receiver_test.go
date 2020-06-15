@@ -1,9 +1,8 @@
 package receiver
 
 import (
-	"github.com/ljy2010a/tailf-based-sampling/common"
+	"fmt"
 	"math/rand"
-	"regexp"
 	"testing"
 	"time"
 )
@@ -110,8 +109,19 @@ func RandStringBytesMaskImprSrc(n int) []byte {
 	return b
 }
 
+var (
+	//s := []byte("1d37a8b17db8568b|1589285985482007|3d1e7e1147c1895d|1d37a8b17db8568b|1259|InventoryCenter|/api/traces|192.168.0.2|http.status_code=200&http.url=http://tracing.console.aliyun.com/getOrder&component=java-web-servlet&span.kind=server&http.method=GET")
+	s = []byte("11be9afcc016ee02|1589285988534901|7068da59f571fbb9|710dfde81d01f3c2|928|PromotionCenter|DoCheckApplicationExist|192.168.91.202|db.instance=db&component=java-jdbc&db.type=h2&span.kind=client&__sql_id=1x7lx2l&peer.address=localhost:8082&error=1")
+)
+
+func Test_aa(t *testing.T) {
+
+	fmt.Println(GetTraceIdWrongByString(s))
+
+}
+
 func BenchmarkGetTraceIdWrongByString(b *testing.B) {
-	s := []byte("1d37a8b17db8568b|1589285985482007|3d1e7e1147c1895d|1d37a8b17db8568b|1259|InventoryCenter|/api/traces|192.168.0.2|http.status_code=200&http.url=http://tracing.console.aliyun.com/getOrder&component=java-web-servlet&span.kind=server&http.method=GET")
+
 	b.ResetTimer()
 	b.ReportAllocs()
 	for n := 0; n < b.N; n++ {
@@ -120,7 +130,6 @@ func BenchmarkGetTraceIdWrongByString(b *testing.B) {
 }
 
 func BenchmarkGetTraceIdWrongByByte(b *testing.B) {
-	s := []byte("1d37a8b17db8568b|1589285985482007|3d1e7e1147c1895d|1d37a8b17db8568b|1259|InventoryCenter|/api/traces|192.168.0.2|http.status_code=200&http.url=http://tracing.console.aliyun.com/getOrder&component=java-web-servlet&span.kind=server&http.method=GET")
 	b.ResetTimer()
 	b.ReportAllocs()
 	for n := 0; n < b.N; n++ {
@@ -129,7 +138,6 @@ func BenchmarkGetTraceIdWrongByByte(b *testing.B) {
 }
 
 func BenchmarkGroupString(b *testing.B) {
-	s := []byte("1d37a8b17db8568b|1589285985482007|3d1e7e1147c1895d|1d37a8b17db8568b|1259|InventoryCenter|/api/traces|192.168.0.2|http.status_code=200&http.url=http://tracing.console.aliyun.com/getOrder&component=java-web-servlet&span.kind=server&http.method=GET")
 	b.ResetTimer()
 	b.ReportAllocs()
 	for n := 0; n < b.N; n++ {
@@ -139,7 +147,6 @@ func BenchmarkGroupString(b *testing.B) {
 }
 
 func BenchmarkGroupByte(b *testing.B) {
-	s := []byte("1d37a8b17db8568b|1589285985482007|3d1e7e1147c1895d|1d37a8b17db8568b|1259|InventoryCenter|/api/traces|192.168.0.2|http.status_code=200&http.url=http://tracing.console.aliyun.com/getOrder&component=java-web-servlet&span.kind=server&http.method=GET")
 	b.ResetTimer()
 	b.ReportAllocs()
 	for n := 0; n < b.N; n++ {
@@ -148,39 +155,11 @@ func BenchmarkGroupByte(b *testing.B) {
 	}
 }
 
-func BenchmarkREGroupByte(b *testing.B) {
-	s := []byte("1d37a8b17db8568b|1589285985482007|3d1e7e1147c1895d|1d37a8b17db8568b|1259|InventoryCenter|/api/traces|192.168.0.2|http.status_code=200&http.url=http://tracing.console.aliyun.com/getOrder&component=java-web-servlet&span.kind=server&http.method=GET")
-	b.ResetTimer()
-	b.ReportAllocs()
-	for n := 0; n < b.N; n++ {
-		GetTraceIdByByte(s)
-		ReSpanWrongString(s)
-	}
-}
-
-var re1 = regexp.MustCompile("error=1")
-var re2 = regexp.MustCompile("http.status_code=")
-
-func ReSpanWrongString(line []byte) bool {
-	l := common.BytesToString(line)
-	//if strings.Contains(l, "error=1") {
-	//	return true
-	//}
-
-	if re1.MatchString(l) {
-		return true
-	}
-
-	//if re2.Match(line) {
-	//	return true
-	//}
-
-	//pos := strings.Index(l, "http.status_code=")
-	//if pos == -1 {
-	//	return false
-	//}
-	//if l[pos+17:pos+20] != "200" {
-	//	return true
-	//}
-	return false
-}
+//func BenchmarkREGroupByte(b *testing.B) {
+//	b.ResetTimer()
+//	b.ReportAllocs()
+//	for n := 0; n < b.N; n++ {
+//		GetTraceIdByByte(s)
+//		ReSpanWrongString(s)
+//	}
+//}
