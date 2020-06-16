@@ -41,7 +41,7 @@ func (r *Compactor) Run() {
 	go func() {
 		i := 0
 		for {
-			if i > 4 {
+			if i > 2 {
 				r.logger.Info("too long to stop")
 				close(r.finishChan)
 				r.finish()
@@ -85,7 +85,6 @@ func (r *Compactor) Run() {
 		}
 	}()
 
-	//r.resultChan = make(chan string, 10000)
 	r.finishChan = make(chan interface{})
 	r.checkSumMap = make(map[string]string)
 	go r.finish()
@@ -107,6 +106,7 @@ func (r *Compactor) Run() {
 		ctx.SetStatusCode(http.StatusOK)
 	})
 	frouter.GET("/warmup", func(ctx *fasthttp.RequestCtx) {
+		time.Sleep(1 * time.Millisecond)
 		ctx.SetStatusCode(http.StatusOK)
 	})
 	frouter.GET("/setParameter", r.SetParamHandler)
@@ -149,7 +149,11 @@ func (r *Compactor) SetWrongHandler(ctx *fasthttp.RequestCtx) {
 			anotherPort = "8001"
 		}
 		reportUrl := fmt.Sprintf("http://127.0.0.1:%s/qw?id=%s&over=%s", anotherPort, td.Id, over)
-		NotifyAnotherWrong(reportUrl)
+		if over == "1" {
+			NotifyAnotherWrong(reportUrl)
+		} else {
+			go NotifyAnotherWrong(reportUrl)
+		}
 	} else {
 		otd := tdi.(*common.TraceData)
 		if otd.Md5 != "" {
@@ -164,7 +168,13 @@ func (r *Compactor) SetWrongHandler(ctx *fasthttp.RequestCtx) {
 		}
 		otd.AddSpan(td.Sb)
 		//otd.Sb = append(otd.Sb, td.Sb...)
-		otd.Md5 = CompactMd5(otd)
+		//if over == "1" {
+		//	otd.Md5 = CompactMd5(otd)
+		//} else {
+		go func() {
+			otd.Md5 = CompactMd5(otd)
+		}()
+		//}
 	}
 	ctx.SetStatusCode(http.StatusOK)
 	return

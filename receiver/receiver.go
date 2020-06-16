@@ -8,6 +8,7 @@ import (
 	"github.com/valyala/fasthttp"
 	"go.uber.org/zap"
 	"net/http"
+	"os"
 	"strings"
 	"sync"
 	"sync/atomic"
@@ -25,9 +26,7 @@ type Receiver struct {
 	deleteChan chan string
 	finishChan chan interface{}
 	closeTimes int64
-	sync.Mutex
 
-	//wrongIdMap  sync.Map
 	consumer    *ChannelGroupConsume
 	traceNums   int64
 	maxSpanNums int
@@ -39,29 +38,36 @@ type Receiver struct {
 	traceMiss   int
 	traceSkip   int
 	wrongHit    int
-	tdSlice     chan *TData
+	//tdSlice     chan *TData
+	tdSlice      []*TData
+	tdSlicePos   int64
+	tdSliceLimit int64
+
+	//tdSendSlice      []*common.TraceData
+	//tdSendSlicePos   int64
+	//tdSendSliceLimit int64
 }
 
 func (r *Receiver) Run() {
 	//var err error
 	r.logger, _ = zap.NewProduction()
 	defer r.logger.Sync()
-	//go func() {
-	//	i := 0
-	//	for {
-	//		if i > 4 {
-	//			r.logger.Info("too long to stop")
-	//			time.Sleep(10 * time.Second)
-	//			os.Exit(0)
-	//		}
-	//		i++
-	//		r.logger.Info("sleep",
-	//			zap.String("port", r.HttpPort),
-	//			zap.Int("i", i),
-	//		)
-	//		time.Sleep(1 * time.Minute)
-	//	}
-	//}()
+	go func() {
+		i := 0
+		for {
+			if i > 2 {
+				r.logger.Info("too long to stop")
+				time.Sleep(10 * time.Second)
+				os.Exit(0)
+			}
+			i++
+			r.logger.Info("sleep",
+				zap.String("port", r.HttpPort),
+				zap.Int("i", i),
+			)
+			time.Sleep(1 * time.Minute)
+		}
+	}()
 	go func() {
 		if !r.AutoDetect {
 			return
@@ -126,11 +132,26 @@ func (r *Receiver) Run() {
 	//	}
 	//}()
 
-	tdNums := 120_0000
-	tdSlice := make(chan *TData, tdNums)
-	for i := 0; i < tdNums; i++ {
-		tdSlice <- NewTData()
+	r.tdSliceLimit = 120_0000
+	//r.tdSlice = make(chan *TData, r.tdSliceLimit)
+	//for i := int64(0); i < r.tdSliceLimit; i++ {
+	//	r.tdSlice <- NewTData()
+	//}
+
+	r.tdSlice = make([]*TData, r.tdSliceLimit)
+	for i := int64(0); i < r.tdSliceLimit; i++ {
+		r.tdSlice[i] = NewTData()
 	}
+
+	//r.tdSendSliceLimit = 1_2000
+	//r.tdSendSlice = make([]*common.TraceData, r.tdSendSliceLimit)
+	//for i := int64(0); i < r.tdSendSliceLimit; i++ {
+	//	r.tdSendSlice[i] = &common.TraceData{
+	//		Source: r.HttpPort,
+	//		Sb:     make([][]byte, 0, 60),
+	//	}
+	//}
+
 	r.idToTrace = NewTDataMap()
 
 	r.deleteChan = make(chan string, 6000)
@@ -159,6 +180,7 @@ func (r *Receiver) Run() {
 		ctx.SetStatusCode(http.StatusOK)
 	})
 	frouter.GET("/warmup", func(ctx *fasthttp.RequestCtx) {
+		time.Sleep(1 * time.Millisecond)
 		ctx.SetStatusCode(http.StatusOK)
 	})
 	frouter.GET("/setParameter", r.SetParamHandler)
@@ -204,9 +226,17 @@ func (r *Receiver) QueryWrongHandler(ctx *fasthttp.RequestCtx) {
 	//	Sbi:    make([]int, 0, 50),
 	//}
 	var td *TData
-	select {
-	case td = <-r.tdSlice:
-	default:
+	//select {
+	//case td = <-r.tdSlice:
+	//default:
+	//	td = NewTData()
+	//}
+
+	//td := NewTData()
+
+	if nowPos := atomic.AddInt64(&r.tdSlicePos, 1); nowPos < r.tdSliceLimit {
+		td = r.tdSlice[nowPos]
+	} else {
 		td = NewTData()
 	}
 	td.Wrong = true
@@ -241,9 +271,15 @@ func (r *Receiver) ConsumeByte(lines []int, idToSpans map[string]*TData) {
 		id := GetTraceIdByString(line)
 		if etd, ok := idToSpans[id]; !ok {
 			var td *TData
-			select {
-			case td = <-r.tdSlice:
-			default:
+			//select {
+			//case td = <-r.tdSlice:
+			//default:
+			//	td = NewTData()
+			//}
+			//td := NewTData()
+			if nowPos := atomic.AddInt64(&r.tdSlicePos, 1); nowPos < r.tdSliceLimit {
+				td = r.tdSlice[nowPos]
+			} else {
 				td = NewTData()
 			}
 			td.Wrong = IfSpanWrongString(line)
@@ -264,10 +300,10 @@ func (r *Receiver) ConsumeByte(lines []int, idToSpans map[string]*TData) {
 		}
 	}
 
-	//mapSize := len(idToSpans)
-	//if mapSize > r.mapMaxSize {
-	//	r.mapMaxSize = mapSize
-	//}
+	mapSize := len(idToSpans)
+	if mapSize > r.mapMaxSize {
+		r.mapMaxSize = mapSize
+	}
 
 	for id, etd := range idToSpans {
 		if etd.Status == common.TraceStatusSkip && etd.Wrong {
@@ -312,13 +348,13 @@ func (r *Receiver) ConsumeByte(lines []int, idToSpans map[string]*TData) {
 
 func (r *Receiver) dropTrace(id string, td *TData, over string) {
 	atomic.AddInt64(&r.traceNums, 1)
-	//spLen := len(td.Sb)
-	//if r.maxSpanNums < spLen {
-	//	r.maxSpanNums = spLen
-	//}
-	//if r.minSpanNums > spLen || r.minSpanNums == 0 {
-	//	r.minSpanNums = spLen
-	//}
+	spLen := len(td.Sbi)
+	if r.maxSpanNums < spLen {
+		r.maxSpanNums = spLen
+	}
+	if r.minSpanNums > spLen || r.minSpanNums == 0 {
+		r.minSpanNums = spLen
+	}
 	wrong := td.Wrong
 	//if !wrong {
 	//	_, ok := r.wrongIdMap.Load(id)

@@ -41,6 +41,23 @@ func (r *Receiver) SendWrongRequest(id string, td *TData, over string) {
 		rtd.Sb[i] = r.consumer.lineBlock[start : start+llen]
 	}
 
+	//var rtd *common.TraceData
+	//if nowPos := atomic.AddInt64(&r.tdSendSlicePos, 1); nowPos < r.tdSendSliceLimit {
+	//	rtd = r.tdSendSlice[nowPos]
+	//} else {
+	//	rtd = &common.TraceData{
+	//		Source: r.HttpPort,
+	//		Sb:     make([][]byte, len(td.Sbi)),
+	//	}
+	//}
+	//
+	//rtd.Id = id
+	//for _, val := range td.Sbi {
+	//	start := val >> 16
+	//	llen := val & 0xffff
+	//	rtd.Sb = append(rtd.Sb, r.consumer.lineBlock[start:start+llen])
+	//}
+
 	b, _ := rtd.Marshal()
 	req := fasthttp.AcquireRequest()
 	defer fasthttp.ReleaseRequest(req)
@@ -53,6 +70,7 @@ func (r *Receiver) SendWrongRequest(id string, td *TData, over string) {
 	resp := fasthttp.AcquireResponse()
 	defer fasthttp.ReleaseResponse(resp)
 
+	return
 	if err := c.Do(req, resp); err != nil {
 		fmt.Printf("set wrong fail id[%v] err[%v] \n", id, err)
 		return

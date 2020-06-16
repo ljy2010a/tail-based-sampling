@@ -49,6 +49,9 @@ func NewChannelGroupConsume(receiver *Receiver, readDone func(), over func()) *C
 }
 
 func (c *ChannelGroupConsume) Read(rd io.Reader) {
+	//runtime.LockOSThread()
+	//defer runtime.UnlockOSThread()
+
 	c.logger.Info("read start")
 	//defer func() {
 	//	err := recover()
@@ -95,8 +98,8 @@ func (c *ChannelGroupConsume) Read(rd io.Reader) {
 			c.logger.Info("err", zap.Error(err))
 			break
 		}
-		//size += llen
-		//total++
+		size += llen
+		total++
 
 		//lines[i] = line
 		lines[i] = start<<16 | llen
@@ -143,6 +146,8 @@ func (c *ChannelGroupConsume) StartConsume() {
 }
 
 func (c *ChannelGroupConsume) consume() {
+	//runtime.LockOSThread()
+	//defer runtime.UnlockOSThread()
 	//defer func() {
 	//	err := recover()
 	//	if err != nil {
