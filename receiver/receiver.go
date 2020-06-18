@@ -9,6 +9,7 @@ import (
 	"go.uber.org/zap"
 	"net/http"
 	"os"
+	"runtime"
 	"strings"
 	"sync"
 	"sync/atomic"
@@ -97,40 +98,46 @@ func (r *Receiver) Run() {
 				r.DataPort = fmt.Sprintf("%d", port)
 
 				dataUrl := fmt.Sprintf("http://127.0.0.1:%s/trace1.data", r.DataPort)
-				go r.ReadHttp(dataUrl)
+				go r.consumer.Read(dataUrl)
 				return
 			}
 
 			if resp.StatusCode == 200 && r.HttpPort == "8001" {
 				r.DataPort = fmt.Sprintf("%d", port)
 				dataUrl2 := fmt.Sprintf("http://127.0.0.1:%s/trace2.data", r.DataPort)
-				go r.ReadHttp(dataUrl2)
+				go r.consumer.Read(dataUrl2)
 				return
 			}
 		}
 	}()
-	//go func() {
-	//	i := 0
-	//	for {
-	//		b2Mb := func(b uint64) uint64 {
-	//			return b / 1024 / 1024
-	//		}
-	//		var m runtime.MemStats
-	//		runtime.ReadMemStats(&m)
-	//
-	//		r.logger.Info("MEM STAT",
-	//			zap.Int("times", i),
-	//			zap.Uint64("Alloc", b2Mb(m.Alloc)),
-	//			zap.Uint64("TotalAlloc", b2Mb(m.TotalAlloc)),
-	//			zap.Uint64("HeapInuse", b2Mb(m.HeapInuse)),
-	//			zap.Uint64("HeapAlloc", b2Mb(m.HeapAlloc)),
-	//			zap.Uint64("Sys", b2Mb(m.Sys)),
-	//			zap.Uint32("NumGC", m.NumGC),
-	//		)
-	//		i++
-	//		time.Sleep(1 * time.Second)
-	//	}
-	//}()
+	go func() {
+		if !r.AutoDetect {
+			return
+		}
+		i := 0
+		for {
+			if i > 20 {
+				return
+			}
+			b2Mb := func(b uint64) uint64 {
+				return b / 1024 / 1024
+			}
+			var m runtime.MemStats
+			runtime.ReadMemStats(&m)
+
+			r.logger.Info("MEM STAT",
+				zap.Int("times", i),
+				zap.Uint64("Alloc", b2Mb(m.Alloc)),
+				zap.Uint64("TotalAlloc", b2Mb(m.TotalAlloc)),
+				zap.Uint64("HeapInuse", b2Mb(m.HeapInuse)),
+				zap.Uint64("HeapAlloc", b2Mb(m.HeapAlloc)),
+				zap.Uint64("Sys", b2Mb(m.Sys)),
+				zap.Uint32("NumGC", m.NumGC),
+			)
+			i++
+			time.Sleep(1 * time.Second)
+		}
+	}()
 
 	r.tdSliceLimit = 120_0000
 	//r.tdSlice = make(chan *TData, r.tdSliceLimit)
@@ -200,12 +207,14 @@ func (r *Receiver) SetParamHandler(ctx *fasthttp.RequestCtx) {
 
 	if r.HttpPort == "8000" {
 		dataUrl := fmt.Sprintf("http://127.0.0.1:%s/trace1.data", r.DataPort)
-		go r.ReadHttp(dataUrl)
+		//go r.ReadHttp(dataUrl)
+		go r.consumer.Read(dataUrl)
 	}
 
 	if r.HttpPort == "8001" {
 		dataUrl2 := fmt.Sprintf("http://127.0.0.1:%s/trace2.data", r.DataPort)
-		go r.ReadHttp(dataUrl2)
+		//go r.ReadHttp(dataUrl2)
+		go r.consumer.Read(dataUrl2)
 	}
 	ctx.SetStatusCode(http.StatusOK)
 	return
@@ -507,6 +516,14 @@ func GetTraceIdWrongByByte(line []byte) (string, bool) {
 }
 
 func GetTraceIdByString(line []byte) string {
+	//defer func() {
+	//	err := recover()
+	//	if err != nil {
+	//		logger.Info("", zap.String("l", string(line)))
+	//		time.Sleep(5 * time.Second)
+	//		panic(err)
+	//	}
+	//}()
 	l := common.BytesToString(line)
 	return l[:strings.IndexByte(l, '|')]
 }

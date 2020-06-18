@@ -70,7 +70,7 @@ func (r *Receiver) SendWrongRequest(id string, td *TData, over string) {
 	resp := fasthttp.AcquireResponse()
 	defer fasthttp.ReleaseResponse(resp)
 
-	return
+	//return
 	if err := c.Do(req, resp); err != nil {
 		fmt.Printf("set wrong fail id[%v] err[%v] \n", id, err)
 		return

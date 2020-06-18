@@ -25,6 +25,7 @@ type Compactor struct {
 	finishChan  chan interface{}
 	checkSumMap map[string]string
 	closeTimes  int64
+	doneWg      sync.WaitGroup
 	idToTrace   sync.Map
 	startTime   time.Time
 }
@@ -149,11 +150,12 @@ func (r *Compactor) SetWrongHandler(ctx *fasthttp.RequestCtx) {
 			anotherPort = "8001"
 		}
 		reportUrl := fmt.Sprintf("http://127.0.0.1:%s/qw?id=%s&over=%s", anotherPort, td.Id, over)
-		if over == "1" {
-			NotifyAnotherWrong(reportUrl)
-		} else {
-			go NotifyAnotherWrong(reportUrl)
-		}
+		r.doneWg.Add(1)
+		//if over == "1" {
+		//	NotifyAnotherWrong(reportUrl, r.doneWg)
+		//} else {
+		go NotifyAnotherWrong(reportUrl, &r.doneWg)
+		//}
 	} else {
 		otd := tdi.(*common.TraceData)
 		if otd.Md5 != "" {
@@ -166,13 +168,14 @@ func (r *Compactor) SetWrongHandler(ctx *fasthttp.RequestCtx) {
 			ctx.SetStatusCode(http.StatusOK)
 			return
 		}
-		otd.AddSpan(td.Sb)
 		//otd.Sb = append(otd.Sb, td.Sb...)
 		//if over == "1" {
 		//	otd.Md5 = CompactMd5(otd)
 		//} else {
 		go func() {
-			otd.Md5 = CompactMd5(otd)
+			r.doneWg.Add(1)
+			otd.AddSpan(td.Sb)
+			otd.Md5 = CompactMd5(otd, &r.doneWg)
 		}()
 		//}
 	}
@@ -192,8 +195,10 @@ func (r *Compactor) NotifyFinishHandler(ctx *fasthttp.RequestCtx) {
 
 func (r *Compactor) finish() {
 	<-r.finishChan
-
 	btime := time.Now()
+	r.doneWg.Wait()
+	donwWaitTime := time.Since(btime)
+	btime = time.Now()
 	sb := strings.Builder{}
 	sb.WriteString("result={")
 	start := true
@@ -204,7 +209,7 @@ func (r *Compactor) finish() {
 		td := value.(*common.TraceData)
 		if td.Md5 == "" {
 			calTimes++
-			td.Md5 = CompactMd5(td)
+			td.Md5 = CompactMd5(td, nil)
 		}
 		if !start {
 			sb.WriteString(",\"")
@@ -215,6 +220,7 @@ func (r *Compactor) finish() {
 		sb.WriteString(td.Id)
 		sb.WriteString("\":\"")
 		sb.WriteString(td.Md5)
+		//sb.WriteString("-")
 		sb.WriteString("\"")
 		//if td.Id == "c074d0a90cd607b" {
 		//	r.logger.Info("example checksum",
@@ -227,6 +233,7 @@ func (r *Compactor) finish() {
 	r.logger.Info("gen checksum",
 		zap.Int("len", i),
 		zap.Int("calTimes", calTimes),
+		zap.Duration("wait", donwWaitTime),
 		zap.Duration("cost", time.Since(btime)),
 	)
 
@@ -242,7 +249,10 @@ func (r *Compactor) finish() {
 	return
 }
 
-func CompactMd5(td *common.TraceData) string {
+func CompactMd5(td *common.TraceData, wg *sync.WaitGroup) string {
+	if wg != nil {
+		defer wg.Done()
+	}
 	//spans := make(common.Spans, len(td.Sb))
 	//for i, sb := range td.Sb {
 	//	spans[i] = ParseSpanData(sb)

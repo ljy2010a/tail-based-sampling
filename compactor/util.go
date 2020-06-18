@@ -43,7 +43,8 @@ func WarmUp(port string, wg sync.WaitGroup) {
 	}
 }
 
-func NotifyAnotherWrong(reqUrl string) {
+func NotifyAnotherWrong(reqUrl string, wg *sync.WaitGroup) {
+	defer wg.Done()
 	req := fasthttp.AcquireRequest()
 	defer fasthttp.ReleaseRequest(req)
 

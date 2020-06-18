@@ -13,7 +13,7 @@ func main() {
 		DataPort:             "8081",
 		CompactorPort:        "8002",
 		CompactorSetWrongUrl: fmt.Sprintf("http://127.0.0.1:8002/sw"),
-		AutoDetect:           true,
+		AutoDetect:           false,
 	}
 
 	rr2 := receiver.Receiver{
@@ -21,7 +21,7 @@ func main() {
 		DataPort:             "8081",
 		CompactorPort:        "8002",
 		CompactorSetWrongUrl: fmt.Sprintf("http://127.0.0.1:8002/sw"),
-		AutoDetect:           true,
+		AutoDetect:           false,
 	}
 
 	compactor := compactor.Compactor{

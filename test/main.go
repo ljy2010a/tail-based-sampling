@@ -2,6 +2,8 @@ package main
 
 import (
 	"fmt"
+	"github.com/ljy2010a/tailf-based-sampling/common"
+	"time"
 )
 
 const INT_MAX = int(^uint(0) >> 1)
@@ -49,4 +51,8 @@ func main() {
 		fmt.Println("end wrong")
 	}
 
+	s := []byte("11be9afcc016ee02|1589285988534901|7068da59f571fbb9|710dfde81d01f3c2|928|PromotionCenter|DoCheckApplicationExist|192.168.91.202|db.instance=db&component=java-jdbc&db.type=h2&span.kind=client&__sql_id=1x7lx2l&peer.address=localhost:8082&error=1")
+	fmt.Println(len(s))
+	fmt.Println(len(common.BytesToString(s)))
+	time.Sleep(1 * time.Second)
 }
