@@ -1,8 +1,10 @@
 package receiver
 
 import (
-	"fmt"
+	"bytes"
+	"github.com/ljy2010a/tailf-based-sampling/common"
 	"math/rand"
+	"strings"
 	"testing"
 	"time"
 )
@@ -111,31 +113,53 @@ func RandStringBytesMaskImprSrc(n int) []byte {
 
 var (
 	//s := []byte("1d37a8b17db8568b|1589285985482007|3d1e7e1147c1895d|1d37a8b17db8568b|1259|InventoryCenter|/api/traces|192.168.0.2|http.status_code=200&http.url=http://tracing.console.aliyun.com/getOrder&component=java-web-servlet&span.kind=server&http.method=GET")
-	s = []byte("11be9afcc016ee02|1589285988534901|7068da59f571fbb9|710dfde81d01f3c2|928|PromotionCenter|DoCheckApplicationExist|192.168.91.202|db.instance=db&component=java-jdbc&db.type=h2&span.kind=client&__sql_id=1x7lx2l&peer.address=localhost:8082&error=1")
+	s   = []byte("11be9afcc016ee02|1589285988534901|7068da59f571fbb9|710dfde81d01f3c2|928|PromotionCenter|DoCheckApplicationExist|192.168.91.202|db.instance=db&component=java-jdbc&db.type=h2&span.kind=client&__sql_id=1x7lx2l&peer.address=localhost:8082&error=1")
+	ss  = []byte("11be9afcc016ee02|1589285988534901|7068da59f571fbb9|710dfde81d01f3c2|928|PromotionCenter|DoCheckApplicationExist|192.168.91.202|db.instance=db&component=java-jdbc&db.type=h2&span.kind=client&__sql_id=1x7lx2l&peer.address=localhost:8082&error=1\n11be9afcc016ee02|1589285988534901|7068da59f571fbb9|710dfde81d01f3c2|928|PromotionCenter|DoCheckApplicationExist|192.168.91.202|db.instance=db&component=java-jdbc&db.type=h2&span.kind=client&__sql_id=1x7lx2l&peer.address=localhost:8082&error=1\n11be9afcc016ee02|1589285988534901|7068da59f571fbb9|710dfde81d01f3c2|928|PromotionCenter|DoCheckApplicationExist|192.168.91.202|db.instance=db&component=java-jdbc&db.type=h2&span.kind=client&__sql_id=1x7lx2l&peer.address=localhost:8082&error=1")
+	ssa = make([]byte, 1024*1024*1024)
 )
 
-func Test_aa(t *testing.T) {
-
-	fmt.Println(GetTraceIdWrongByString(s))
-
-}
-
-func BenchmarkGetTraceIdWrongByString(b *testing.B) {
-
+func BenchmarkByteIndex(b *testing.B) {
 	b.ResetTimer()
 	b.ReportAllocs()
+	copy(ssa[99999:], ss)
 	for n := 0; n < b.N; n++ {
-		GetTraceIdWrongByString(s)
+		bytes.IndexByte(ssa[99999:99999+1000], '\n')
+		//for _, k := range ss[130:] {
+		//	if k == '\n' {
+		//		break
+		//	}
+		//}
 	}
 }
 
-func BenchmarkGetTraceIdWrongByByte(b *testing.B) {
+func BenchmarkStringIndex(b *testing.B) {
 	b.ResetTimer()
 	b.ReportAllocs()
 	for n := 0; n < b.N; n++ {
-		GetTraceIdWrongByByte(s)
+		strings.IndexByte(common.BytesToString(ss[130:350]), '\n')
 	}
 }
+
+//func Test_aa(t *testing.T) {
+//	fmt.Println(GetTraceIdWrongByString(s))
+//}
+
+//func BenchmarkGetTraceIdWrongByString(b *testing.B) {
+//
+//	b.ResetTimer()
+//	b.ReportAllocs()
+//	for n := 0; n < b.N; n++ {
+//		GetTraceIdWrongByString(s)
+//	}
+//}
+
+//func BenchmarkGetTraceIdWrongByByte(b *testing.B) {
+//	b.ResetTimer()
+//	b.ReportAllocs()
+//	for n := 0; n < b.N; n++ {
+//		GetTraceIdWrongByByte(s)
+//	}
+//}
 
 func BenchmarkGroupString(b *testing.B) {
 	b.ResetTimer()
@@ -146,14 +170,14 @@ func BenchmarkGroupString(b *testing.B) {
 	}
 }
 
-func BenchmarkGroupByte(b *testing.B) {
-	b.ResetTimer()
-	b.ReportAllocs()
-	for n := 0; n < b.N; n++ {
-		GetTraceIdByByte(s)
-		IfSpanWrongByte(s)
-	}
-}
+//func BenchmarkGroupByte(b *testing.B) {
+//	b.ResetTimer()
+//	b.ReportAllocs()
+//	for n := 0; n < b.N; n++ {
+//		GetTraceIdByByte(s)
+//		IfSpanWrongByte(s)
+//	}
+//}
 
 //func BenchmarkREGroupByte(b *testing.B) {
 //	b.ResetTimer()

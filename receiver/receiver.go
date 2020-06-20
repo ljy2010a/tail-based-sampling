@@ -8,8 +8,6 @@ import (
 	"github.com/valyala/fasthttp"
 	"go.uber.org/zap"
 	"net/http"
-	"os"
-	"runtime"
 	"strings"
 	"sync"
 	"sync/atomic"
@@ -53,22 +51,22 @@ func (r *Receiver) Run() {
 	//var err error
 	r.logger, _ = zap.NewProduction()
 	defer r.logger.Sync()
-	go func() {
-		i := 0
-		for {
-			if i > 2 {
-				r.logger.Info("too long to stop")
-				time.Sleep(10 * time.Second)
-				os.Exit(0)
-			}
-			i++
-			r.logger.Info("sleep",
-				zap.String("port", r.HttpPort),
-				zap.Int("i", i),
-			)
-			time.Sleep(1 * time.Minute)
-		}
-	}()
+	//go func() {
+	//	i := 0
+	//	for {
+	//		if i > 2 {
+	//			r.logger.Info("too long to stop")
+	//			time.Sleep(10 * time.Second)
+	//			os.Exit(0)
+	//		}
+	//		i++
+	//		r.logger.Info("sleep",
+	//			zap.String("port", r.HttpPort),
+	//			zap.Int("i", i),
+	//		)
+	//		time.Sleep(1 * time.Minute)
+	//	}
+	//}()
 	go func() {
 		if !r.AutoDetect {
 			return
@@ -110,34 +108,34 @@ func (r *Receiver) Run() {
 			}
 		}
 	}()
-	go func() {
-		if !r.AutoDetect {
-			return
-		}
-		i := 0
-		for {
-			if i > 20 {
-				return
-			}
-			b2Mb := func(b uint64) uint64 {
-				return b / 1024 / 1024
-			}
-			var m runtime.MemStats
-			runtime.ReadMemStats(&m)
-
-			r.logger.Info("MEM STAT",
-				zap.Int("times", i),
-				zap.Uint64("Alloc", b2Mb(m.Alloc)),
-				zap.Uint64("TotalAlloc", b2Mb(m.TotalAlloc)),
-				zap.Uint64("HeapInuse", b2Mb(m.HeapInuse)),
-				zap.Uint64("HeapAlloc", b2Mb(m.HeapAlloc)),
-				zap.Uint64("Sys", b2Mb(m.Sys)),
-				zap.Uint32("NumGC", m.NumGC),
-			)
-			i++
-			time.Sleep(1 * time.Second)
-		}
-	}()
+	//go func() {
+	//	if !r.AutoDetect {
+	//		return
+	//	}
+	//	i := 0
+	//	for {
+	//		if i > 20 {
+	//			return
+	//		}
+	//		b2Mb := func(b uint64) uint64 {
+	//			return b / 1024 / 1024
+	//		}
+	//		var m runtime.MemStats
+	//		runtime.ReadMemStats(&m)
+	//
+	//		r.logger.Info("MEM STAT",
+	//			zap.Int("times", i),
+	//			zap.Uint64("Alloc", b2Mb(m.Alloc)),
+	//			zap.Uint64("TotalAlloc", b2Mb(m.TotalAlloc)),
+	//			zap.Uint64("HeapInuse", b2Mb(m.HeapInuse)),
+	//			zap.Uint64("HeapAlloc", b2Mb(m.HeapAlloc)),
+	//			zap.Uint64("Sys", b2Mb(m.Sys)),
+	//			zap.Uint32("NumGC", m.NumGC),
+	//		)
+	//		i++
+	//		time.Sleep(1 * time.Second)
+	//	}
+	//}()
 
 	r.tdSliceLimit = 120_0000
 	//r.tdSlice = make(chan *TData, r.tdSliceLimit)
@@ -161,7 +159,7 @@ func (r *Receiver) Run() {
 
 	r.idToTrace = NewTDataMap()
 
-	r.deleteChan = make(chan string, 6000)
+	r.deleteChan = make(chan string, 3000)
 	r.finishChan = make(chan interface{})
 	doneFunc := func() {
 	}
@@ -356,14 +354,14 @@ func (r *Receiver) ConsumeByte(lines []int, idToSpans map[string]*TData) {
 }
 
 func (r *Receiver) dropTrace(id string, td *TData, over string) {
-	atomic.AddInt64(&r.traceNums, 1)
-	spLen := len(td.Sbi)
-	if r.maxSpanNums < spLen {
-		r.maxSpanNums = spLen
-	}
-	if r.minSpanNums > spLen || r.minSpanNums == 0 {
-		r.minSpanNums = spLen
-	}
+	//atomic.AddInt64(&r.traceNums, 1)
+	//spLen := len(td.Sbi)
+	//if r.maxSpanNums < spLen {
+	//	r.maxSpanNums = spLen
+	//}
+	//if r.minSpanNums > spLen || r.minSpanNums == 0 {
+	//	r.minSpanNums = spLen
+	//}
 	wrong := td.Wrong
 	//if !wrong {
 	//	_, ok := r.wrongIdMap.Load(id)

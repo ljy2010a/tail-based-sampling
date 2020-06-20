@@ -220,7 +220,7 @@ func (r *Compactor) finish() {
 		sb.WriteString(td.Id)
 		sb.WriteString("\":\"")
 		sb.WriteString(td.Md5)
-		//sb.WriteString("-")
+		sb.WriteString("-")
 		sb.WriteString("\"")
 		//if td.Id == "c074d0a90cd607b" {
 		//	r.logger.Info("example checksum",

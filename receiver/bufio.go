@@ -32,12 +32,13 @@ var (
 
 // Reader implements buffering for an io.Reader object.
 type Reader struct {
-	buf                          []byte
-	rd                           io.Reader // reader provided by the client
-	r, w, bufSize, readBlockSize int       // buf read and write positions
-	err                          error
-	lastByte                     int // last byte read for UnreadByte; -1 means invalid
-	lastRuneSize                 int // size of last rune read for UnreadRune; -1 means invalid
+	buf                        []byte
+	rd                         io.Reader // reader provided by the client
+	r, w, bufSize, readBufSize int       // buf read and write positions
+	err                        error
+	lastByte                   int // last byte read for UnreadByte; -1 means invalid
+	lastRuneSize               int // size of last rune read for UnreadRune; -1 means invalid
+
 }
 
 const minReadBufferSize = 16
@@ -56,7 +57,7 @@ func NewReaderSize(rd io.Reader, bufSize int, readBlockSize int, buf []byte) *Re
 	//	bufSize = minReadBufferSize
 	//}
 	r := new(Reader)
-	r.readBlockSize = readBlockSize
+	r.readBufSize = readBlockSize
 	r.bufSize = bufSize
 	r.reset(buf, rd)
 	return r
@@ -78,12 +79,12 @@ func (b *Reader) Reset(r io.Reader) {
 
 func (b *Reader) reset(buf []byte, r io.Reader) {
 	*b = Reader{
-		buf:           buf,
-		rd:            r,
-		readBlockSize: b.readBlockSize,
-		bufSize:       b.bufSize,
-		lastByte:      -1,
-		lastRuneSize:  -1,
+		buf:          buf,
+		rd:           r,
+		readBufSize:  b.readBufSize,
+		bufSize:      b.bufSize,
+		lastByte:     -1,
+		lastRuneSize: -1,
 	}
 }
 
@@ -91,26 +92,28 @@ var errNegativeRead = errors.New("bufio: reader returned negative count from Rea
 
 // fill reads a new chunk into the buffer.
 func (b *Reader) fill() {
-	//fmt.Println("fill", b.w, b.readBlockSize)
+	//fmt.Println("fill", b.w, b.readBufSize)
 	// Slide existing data to beginning.
-	if b.w+b.readBlockSize > b.bufSize {
+	if b.w+b.readBufSize > b.bufSize {
 		fmt.Println("move", time.Now().UnixNano()/1e6, b.w)
-		copy(b.buf, b.buf[b.r:b.w])
-		b.w -= b.r
+		//copy(b.buf, b.buf[b.r:b.w])
+		//time.Sleep(500 * time.Millisecond)
+		//b.w -= b.r
+		b.w = 0
 		b.r = 0
 	}
 
-	if b.w >= len(b.buf) {
-		panic("bufio: tried to fill full buffer")
-	}
+	//if b.w >= len(b.buf) {
+	//	panic("bufio: tried to fill full buffer")
+	//}
 
 	// Read new data: try a limited number of times.
 	//for i := maxConsecutiveEmptyReads; i > 0; i-- {
-	// n, err := b.rd.Read(b.buf[b.w:])
-	n, err := io.ReadAtLeast(b.rd, b.buf[b.w:], b.readBlockSize)
-	if n < 0 {
-		panic(errNegativeRead)
-	}
+	//n, err := b.rd.Read(b.buf[b.w:])
+	n, err := io.ReadAtLeast(b.rd, b.buf[b.w:], b.readBufSize)
+	//if n < 0 {
+	//	panic(errNegativeRead)
+	//}
 	b.w += n
 	if err != nil {
 		b.err = err
@@ -118,7 +121,7 @@ func (b *Reader) fill() {
 		return
 	}
 	if n > 0 {
-		//fmt.Printf("read n=%d \n", n)
+		fmt.Printf("read n=%d \n", n)
 		return
 	}
 	//}
@@ -380,18 +383,33 @@ func (b *Reader) ReadSlice(delim byte) (line []byte, err error) {
 	return
 }
 
-func (b *Reader) ReadSlicePos(delim byte) (start, llen int, err error) {
-	s := 0 // search start index
+func (b *Reader) ReadSlicePos() (start, llen int, err error) {
+	//s := 0 // search start index
 	for {
 		// Search buffer.
-		if i := bytes.IndexByte(b.buf[b.r+s:b.w], delim); i >= 0 {
-			i += s
-			//line = b.buf[b.r : b.r+i+1]
-			start = b.r
-			llen = i + 1
-			b.r += i + 1
-			break
-		}
+		//if b.r+512 > b.w {
+		//	if i := bytes.IndexByte(b.buf[b.r:b.w], '\n'); i >= 0 {
+		//		start = b.r
+		//		llen = i + 1
+		//		b.r += i + 1
+		//		break
+		//	}
+		//} else {
+		//	if i := bytes.IndexByte(b.buf[b.r:b.r+512], '\n'); i >= 0 {
+		//		//i += 100
+		//		start = b.r
+		//		llen = i + 1
+		//		b.r += i + 1
+		//		break
+		//	}
+		//}
+
+		//if i := bytes.IndexByte(b.buf[b.r:b.w], '\n'); i >= 0 {
+		//	start = b.r
+		//	llen = i + 1
+		//	b.r += i + 1
+		//	break
+		//}
 
 		// Pending error?
 		if b.err != nil {
@@ -409,7 +427,49 @@ func (b *Reader) ReadSlicePos(delim byte) (start, llen int, err error) {
 		//	break
 		//}
 
-		s = b.w - b.r // do not rescan area we scanned before
+		//s = b.w - b.r // do not rescan area we scanned before
+
+		b.fill() // buffer is not full
+	}
+
+	// Handle last byte, if any.
+	//if i := len(line) - 1; i >= 0 {
+	//	b.lastByte = int(line[i])
+	//	b.lastRuneSize = -1
+	//}
+
+	return
+}
+
+func (b *Reader) PureRead() (start, llen int, err error) {
+	//s := 0 // search start index
+	for {
+		//if i := bytes.IndexByte(b.buf[b.r:b.w], '\n'); i >= 0 {
+		//	//i += s
+		//	//line = b.buf[b.r : b.r+i+1]
+		//	start = b.r
+		//	llen = i + 1
+		//	b.r += i + 1
+		//	break
+		//}
+
+		// Pending error?
+		if b.err != nil {
+			//line = b.buf[b.r:b.w]
+			b.r = b.w
+			err = b.readErr()
+			break
+		}
+
+		//// Buffer full?
+		//if b.Buffered() >= len(b.buf) {
+		//	b.r = b.w
+		//	line = b.buf
+		//	err = ErrBufferFull
+		//	break
+		//}
+
+		//s = b.w - b.r // do not rescan area we scanned before
 
 		b.fill() // buffer is not full
 	}

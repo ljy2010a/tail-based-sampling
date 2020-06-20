@@ -32,8 +32,8 @@ type ChannelGroupConsume struct {
 func NewChannelGroupConsume(receiver *Receiver, readDone func(), over func()) *ChannelGroupConsume {
 	// 500w = 1450MB
 	// 1w = 2.6MB
-	blockLen := int(2*1024*1024*1024) + 4096*50
-	readBufSize := 128 * 1024 * 1024
+	blockLen := int(2.5*1024*1024*1024) + 160*1024*1024
+	readBufSize := 64 * 1024 * 1024
 	c := &ChannelGroupConsume{
 		receiver:     receiver,
 		logger:       receiver.logger,
@@ -69,7 +69,7 @@ func (c *ChannelGroupConsume) Read(dataUrl string) {
 	size := 0
 	total := 0
 	maxLine := 0
-	minLine := 0
+	minLine := 500
 	i := 0
 	iLimit := c.lineGroupNum - 1
 	var lines []int
@@ -100,11 +100,18 @@ func (c *ChannelGroupConsume) Read(dataUrl string) {
 	//	i++
 	//}
 
-	//br := NewReaderSize(rd, c.blockLen, c.readBufSize, c.lineBlock)
+	//c.logger.Info("dataUrl", zap.String("dataUrl", dataUrl))
+	//resp, err := http.Get(dataUrl)
+	//if err != nil {
+	//	c.logger.Error("http get err", zap.Error(err))
+	//	return
+	//}
+	//defer resp.Body.Close()
+	//
+	//br := NewReaderSize(resp.Body, c.blockLen, c.readBufSize, c.lineBlock)
 	////br := bufio.NewReaderSize(rd, c.readBufSize)
 	//for {
-	//	//line, err := br.ReadSlice('\n')
-	//	start, llen, err := br.ReadSlicePos('\n')
+	//	start, llen, err := br.ReadSlicePos()
 	//	if err != nil {
 	//		c.logger.Info("err", zap.Error(err))
 	//		break
@@ -131,71 +138,55 @@ func (c *ChannelGroupConsume) Read(dataUrl string) {
 	hbs := GenRange(dataUrl, c.blockLen)
 	downTaskChan := make(chan int, len(hbs))
 	for hi, hb := range hbs {
-		br := &HReader{}
-		br.readBufSize = c.readBufSize
-		br.bufSize = c.blockLen
-		br.buf = c.lineBlock
-		br.rd = hb.ioReader
-
-		br.w = hb.BufStart
-		br.r = hb.BufStart
-		hb.bufReader = br
+		hb.readBufSize = c.readBufSize
+		hb.buf = c.lineBlock
 		downTaskChan <- hi
 	}
 
-	//for i := 0; i < 2; i++ {
-	//	go func() {
-	//		for hi := range downTaskChan {
-	//			if !hbs[hi].exitRead {
-	//				logger.Info("rush", zap.Int("seq", hbs[hi].Seq))
-	//				hbs[hi].wg.Add(1)
-	//				hbs[hi].bufReader.asyncfill(hbs[hi].readSignal, &hbs[hi].wg, hbs[hi].Seq)
-	//			}
-	//		}
-	//	}()
-	//}
+	for i := 0; i < 2; i++ {
+		go func() {
+			for hi := range downTaskChan {
+				if !hbs[hi].exitRead {
+					logger.Info("rush", zap.Int("seq", hbs[hi].Seq))
+					hbs[hi].wg.Add(1)
+					hbs[hi].asyncfill()
+				}
+			}
+		}()
+	}
 
 	//idToSpans := make(map[string]*TData, 1024)
 
-	//logger.Info("rush", zap.Int("seq", 0))
-	//hbs[0].wg.Add(1)
-	//go hbs[0].bufReader.asyncfill(hbs[0].readSignal, &hbs[0].wg, 0)
-	//
-	//hbs[1].wg.Add(1)
-	//go hbs[1].bufReader.asyncfill(hbs[1].readSignal, &hbs[1].wg, 1)
-
 	for hi, hb := range hbs {
-		//nextHi := hi + 2
-		//if nextHi < len(hbs) {
-		//	logger.Info("rush", zap.Int("seq", nextHi))
-		//	hbs[nextHi].wg.Add(1)
-		//	go hbs[nextHi].bufReader.asyncfill(hbs[nextHi].readSignal, &hbs[nextHi].wg, nextHi)
-		//}
 		// check last less
 		beforeHi := hi - 1
 		if beforeHi >= 0 {
-			less := hbs[beforeHi].bufReader.w - hbs[beforeHi].bufReader.r
+			less := hbs[beforeHi].w - hbs[beforeHi].r
 			if less > 0 {
-				copy(c.lineBlock[hb.BufStart-less:hb.BufStart], c.lineBlock[hbs[beforeHi].bufReader.r:hbs[beforeHi].bufReader.w])
-				hb.bufReader.r = hb.BufStart - less
+				copy(c.lineBlock[hb.BufStart-less:hb.BufStart], c.lineBlock[hbs[beforeHi].r:hbs[beforeHi].w])
+				hb.r = hb.BufStart - less
 				//logger.Info("before has less",
 				//	zap.String("s", string(c.lineBlock[hb.BufStart-less:hb.BufStart])),
 				//)
 			}
 		}
-		c.logger.Info("run info", zap.Int("seq", hi), zap.Int("has w", hb.bufReader.w-hb.bufReader.r))
-		//hb.exitRead = true
-		//close(hb.readSignal)
-		//hb.wg.Wait()
+		hb.exitRead = true
+		close(hb.readSignal)
+		hb.wg.Wait()
+		c.logger.Info("run info",
+			zap.Int("seq", hi),
+			zap.Int("has w", hb.w-hb.r),
+		)
+		//continue
 		stime := time.Now()
 		for {
-			start, llen, err := hb.bufReader.ReadSlicePos()
+			start, llen, err := hb.ReadSlicePos()
 			if err != nil {
 				//c.logger.Info("err", zap.Int("seq", hi), zap.Error(err))
 				break
 			}
-			size += llen
-			total++
+			//size += llen
+			//total++
 			//if llen < 150 {
 			//	c.logger.Info("wrong llen", zap.Int("seq", hi), zap.Int("llen", llen))
 			//	continue
@@ -292,7 +283,7 @@ func (c *ChannelGroupConsume) consume() {
 
 	btime := time.Now()
 	once := sync.Once{}
-	idToSpans := make(map[string]*TData, 1024)
+	idToSpans := make(map[string]*TData, 1024*8)
 	for lines := range c.lineChan {
 		once.Do(func() {
 			btime = time.Now()
@@ -308,16 +299,19 @@ func (c *ChannelGroupConsume) consume() {
 }
 
 type HttpBlock struct {
-	Seq        int
-	HttpStart  int
-	HttpEnd    int
-	BufStart   int
-	BufEnd     int
-	ioReader   io.Reader
-	bufReader  *HReader
-	readSignal chan interface{}
-	exitRead   bool
-	wg         sync.WaitGroup
+	Seq       int
+	HttpStart int
+	HttpEnd   int
+	BufStart  int
+	BufEnd    int
+
+	rd                io.Reader
+	readSignal        chan interface{}
+	exitRead          bool
+	buf               []byte
+	r, w, readBufSize int
+	err               error
+	wg                sync.WaitGroup
 }
 
 func GenRange(dataUrl string, bufSize int) []*HttpBlock {
@@ -370,7 +364,7 @@ func GenRange(dataUrl string, bufSize int) []*HttpBlock {
 		}
 		bufEnd = bufStart + stepSize
 		if bufEnd > bufSize {
-			bufStart = 1024
+			bufStart = 16 * 1024 * 1024
 			bufEnd = bufStart + stepSize
 		}
 		rd, err := httpGet(dataUrl, httpStart, httpEnd)
@@ -393,11 +387,12 @@ func GenRange(dataUrl string, bufSize int) []*HttpBlock {
 			HttpEnd:    httpEnd,
 			BufStart:   bufStart,
 			BufEnd:     bufEnd,
-			ioReader:   rd,
+			rd:         rd,
+			r:          bufStart,
+			w:          bufStart,
 			readSignal: make(chan interface{}),
-			//exitRead:   make(chan interface{}),
 		})
-		bufStart = bufEnd + 1024
+		bufStart = bufEnd + 16*1024*1024
 		httpStart = httpEnd
 		seq++
 	}
