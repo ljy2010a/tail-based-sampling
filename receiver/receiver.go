@@ -554,14 +554,14 @@ func IfSpanWrongString(line []byte) bool {
 
 	l := common.BytesToString(line)
 	//llen := len(l)
-	if strings.Contains(l, "error=1") {
-		return true
-	}
+	//if strings.Contains(l, "error=1") {
+	//	return true
+	//}
 	pos := strings.Index(l, "http.status_code=")
 	if pos == -1 {
-		//if strings.Contains(l, "error=1") {
-		//	return true
-		//}
+		if strings.Contains(l, "error=1") {
+			return true
+		}
 		return false
 		//if l[llen-7] != 'e' {
 		//	return false
@@ -596,5 +596,6 @@ func IfSpanWrongString(line []byte) bool {
 	if l[pos+19] != '0' {
 		return true
 	}
-	return false
+	return strings.Contains(l, "error=1")
+	//return false
 }
