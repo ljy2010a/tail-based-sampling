@@ -20,6 +20,14 @@ func main() {
 		runtime.GOMAXPROCS(-1),
 	)
 
+	defer func() {
+		err := recover()
+		if err != nil {
+			fmt.Println(err)
+			time.Sleep(10 * time.Second)
+		}
+	}()
+
 	rand.Seed(time.Now().Unix())
 	var httpPort string
 	flag.StringVar(&httpPort, "p", "", "port")
@@ -36,7 +44,7 @@ func main() {
 		receiver.Run()
 	} else if httpPort == "8002" {
 		compactor := compactor.Compactor{
-			HttpPort:   httpPort,
+			HttpPort: httpPort,
 			//AutoDetect: true,
 		}
 		runtime.GOMAXPROCS(1 * 4)

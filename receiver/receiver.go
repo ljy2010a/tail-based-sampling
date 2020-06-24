@@ -45,6 +45,8 @@ type Receiver struct {
 	//tdSendSlice      []*common.TraceData
 	//tdSendSlicePos   int64
 	//tdSendSliceLimit int64
+
+	idPool chan map[string]*TData
 }
 
 func (r *Receiver) Run() {
@@ -114,6 +116,11 @@ func (r *Receiver) Run() {
 	//		Source: r.HttpPort,
 	//		Sb:     make([][]byte, 0, 60),
 	//	}
+	//}
+
+	//r.idPool = make(chan map[string]*TData, 100)
+	//for i := int64(0); i < 100; i++ {
+	//	r.idPool <- make(map[string]*TData, 1_0000)
 	//}
 
 	r.idToTrace = NewTDataMap()
@@ -266,40 +273,44 @@ func (r *Receiver) QueryWrongHandler(ctx *fasthttp.RequestCtx) {
 }
 
 func (r *Receiver) ConsumeByte(lines []int) {
+	//var idToSpans map[string]*TData
+	//select {
+	//case idToSpans = <-r.idPool:
+	//default:
+	//	idToSpans = make(map[string]*TData, 1_0000)
+	//}
 	idToSpans := make(map[string]*TData, 1_0000)
 	for i, val := range lines {
 		start := val >> 16
 		llen := val & 0xffff
 		line := r.consumer.lineBlock[start : start+llen]
-		//id, wrong := GetTraceIdWrongByString(line)
-		id := GetTraceIdByString(line)
+		id, wrong := GetTraceIdWrongByByte(line)
+		//if wrong != IfSpanWrongString(line) {
+		//	r.logger.Info("w", zap.String("l", string(line)))
+		//}
+		//id := GetTraceIdByString(line)
 		if etd, ok := idToSpans[id]; !ok {
 			var td *TData
-			//select {
-			//case td = <-r.tdSlice:
-			//default:
-			//	td = NewTData()
-			//}
 			//td := NewTData()
 			//if nowPos := atomic.AddInt64(&r.tdSlicePos, 1); nowPos < r.tdSliceLimit {
 			//	td = r.tdSlice[nowPos]
 			//} else {
 			td = NewTData()
 			//}
-			td.Wrong = IfSpanWrongString(line)
-			//td.Wrong = wrong
+			//td.Wrong = IfSpanWrongString(line)
+			td.Wrong = wrong
 			if i > 2_0000 && i < 23_0000 {
 				td.Status = common.TraceStatusSkip
 			}
 			td.Sbi = append(td.Sbi, val)
 			idToSpans[id] = td
 		} else {
-			if !etd.Wrong && IfSpanWrongString(line) {
-				etd.Wrong = true
-			}
-			//if !etd.Wrong && wrong {
+			//if !etd.Wrong && IfSpanWrongString(line) {
 			//	etd.Wrong = true
 			//}
+			if !etd.Wrong && wrong {
+				etd.Wrong = true
+			}
 			etd.Sbi = append(etd.Sbi, val)
 		}
 	}
@@ -498,16 +509,163 @@ func GetTraceIdWrongByString(line []byte) (string, bool) {
 	//return id, false
 }
 
-func GetTraceIdWrongByByte(line []byte) (string, bool) {
-	firstIdx := bytes.IndexByte(line, '|')
-	id := common.BytesToString(line[:firstIdx])
-	if bytes.Contains(line, Ferr1) {
-		return id, true
+func GetTraceIdWrongByByte(l []byte) (string, bool) {
+	//firstIdx := bytes.IndexByte(l, '|')
+	//id := common.BytesToString(l[:firstIdx])
+	//if bytes.Contains(l, Ferr1) {
+	//	return id, true
+	//}
+	//if bytes.Contains(l, FCode) && !bytes.Contains(l, FCode200) {
+	//	return id, true
+	//}
+	//return id, false
+	ls := common.BytesToString(l)
+	tpos := strings.IndexByte(ls, '|')
+	id := ls[:tpos]
+
+	//tpos := bytes.IndexByte(l, '|')
+	//id := common.BytesToString(l[:tpos])
+
+	//tagPos := tpos + 1
+	//for {
+	//	p := bytes.IndexByte(l[tagPos:], '|')
+	//	if p == -1 {
+	//		break
+	//	} else {
+	//		tagPos += p + 1
+	//	}
+	//}
+	//ll := l[tagPos:]
+	//ll := l[bytes.IndexByte(l, '&')-22:]
+
+	//if bytes.Contains(ll, Ferr1) {
+	//	return id, true
+	//}
+	//if bytes.Contains(ll, FCode) && !bytes.Contains(ll, FCode200) {
+	//	return id, true
+	//}
+	//return id, false
+
+	//pos := bytes.Index(ll, FCode)
+	//if pos == -1 {
+	//	return id, bytes.Contains(ll, Ferr1)
+	//}
+	//if ll[pos+17] != '2' {
+	//	return id, true
+	//}
+	//if ll[pos+18] != '0' {
+	//	return id, true
+	//}
+	//if ll[pos+19] != '0' {
+	//	return id, true
+	//}
+	//return id, bytes.Contains(ll, Ferr1)
+
+	tagPos := tpos + 1
+	httpHit := false
+	for {
+		p := bytes.IndexByte(l[tagPos:], '&')
+		if p == -1 {
+			//http.status_code=200
+			//error=1
+			llen := len(l)
+			if (tagPos+7) < llen &&
+				l[tagPos+0] == 'e' &&
+				l[tagPos+1] == 'r' &&
+				l[tagPos+2] == 'r' &&
+				l[tagPos+3] == 'o' &&
+				l[tagPos+4] == 'r' &&
+				l[tagPos+5] == '=' &&
+				l[tagPos+6] == '1' {
+				return id, true
+			}
+			//fmt.Println(string(l[tagPos:]))
+			//if bytes.Equal(l[tagPos:], Ferr1) {
+			//	return id, true
+			//}
+			// http.status_code=
+			if tagPos+17 < llen &&
+				l[tagPos+0] == 'h' &&
+				l[tagPos+1] == 't' &&
+				l[tagPos+2] == 't' &&
+				l[tagPos+3] == 'p' &&
+				l[tagPos+4] == '.' &&
+				l[tagPos+5] == 's' &&
+				l[tagPos+6] == 't' &&
+				l[tagPos+7] == 'a' &&
+				l[tagPos+8] == 't' &&
+				l[tagPos+9] == 'u' &&
+				l[tagPos+10] == 's' &&
+				l[tagPos+11] == '_' &&
+				l[tagPos+12] == 'c' &&
+				l[tagPos+13] == 'o' &&
+				l[tagPos+14] == 'd' &&
+				l[tagPos+15] == 'e' &&
+				l[tagPos+16] == '=' && !httpHit {
+				httpHit = true
+				if tagPos+19 < llen && (l[tagPos+17] != '2' || l[tagPos+18] != '0' || l[tagPos+19] != '0') {
+					return id, true
+				}
+			}
+			return id, false
+		} else {
+			tagPos += p + 1
+			//error=1
+			//fmt.Println(string(l[tagPos-8:]))
+			if l[tagPos-8] == 'e' &&
+				l[tagPos-7] == 'r' &&
+				l[tagPos-6] == 'r' &&
+				l[tagPos-5] == 'o' &&
+				l[tagPos-4] == 'r' &&
+				l[tagPos-3] == '=' &&
+				l[tagPos-2] == '1' {
+				return id, true
+			}
+			//if bytes.Equal(l[tagPos-8:tagPos-1], Ferr1) {
+			//	return id, true
+			//}
+
+			// http.status_code=
+			//fmt.Println(string(l[tagPos-21:tagPos-4]), string(l[tagPos-21]), string(l[tagPos-4]), string(l[tagPos-3]), string(l[tagPos-2]))
+			if l[tagPos-21] == 'h' &&
+				l[tagPos-20] == 't' &&
+				l[tagPos-19] == 't' &&
+				l[tagPos-18] == 'p' &&
+				l[tagPos-17] == '.' &&
+				l[tagPos-16] == 's' &&
+				l[tagPos-15] == 't' &&
+				l[tagPos-14] == 'a' &&
+				l[tagPos-13] == 't' &&
+				l[tagPos-12] == 'u' &&
+				l[tagPos-11] == 's' &&
+				l[tagPos-10] == '_' &&
+				l[tagPos-9] == 'c' &&
+				l[tagPos-8] == 'o' &&
+				l[tagPos-7] == 'd' &&
+				l[tagPos-6] == 'e' &&
+				l[tagPos-5] == '=' && !httpHit {
+				if l[tagPos-4] == '2' &&
+					l[tagPos-3] == '0' &&
+					l[tagPos-2] == '0' {
+					return id, false
+				}
+				if l[tagPos-4] != '2' ||
+					l[tagPos-3] != '0' ||
+					l[tagPos-2] != '0' {
+					return id, true
+				}
+				httpHit = true
+			}
+			//fmt.Println(string(l[tagPos-21:tagPos-4]), string(l[tagPos-4]), string(l[tagPos-3]), string(l[tagPos-2]))
+			//if bytes.Equal(l[tagPos-21:tagPos-4], FCode) && !httpHit {
+			//	httpHit = true
+			//	if l[tagPos-4] != '2' && l[tagPos-3] != '0' && l[tagPos-2] != '0' {
+			//		return id, true
+			//	}
+			//}
+		}
 	}
-	if bytes.Contains(line, FCode) && !bytes.Contains(line, FCode200) {
-		return id, true
-	}
-	return id, false
+
 }
 
 func GetTraceIdByString(line []byte) string {

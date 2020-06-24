@@ -38,7 +38,7 @@ func NewChannelGroupConsume(receiver *Receiver, readDone func(), over func()) *C
 	c := &ChannelGroupConsume{
 		receiver:     receiver,
 		logger:       receiver.logger,
-		lineChan:     make(chan []int, 20),
+		lineChan:     make(chan []int, 80),
 		lineGroupNum: 250000,
 		readBufSize:  readBufSize,
 		workNum:      2,
@@ -61,12 +61,12 @@ func (c *ChannelGroupConsume) Read(dataUrl string) {
 	//defer runtime.UnlockOSThread()
 
 	c.logger.Info("read start")
-	//defer func() {
-	//	err := recover()
-	//	if err != nil {
-	//		c.logger.Error("", zap.String("err", fmt.Sprintf("%v", err)))
-	//	}
-	//}()
+	defer func() {
+		err := recover()
+		if err != nil {
+			c.logger.Error("", zap.String("err", fmt.Sprintf("%v", err)))
+		}
+	}()
 	btime := time.Now()
 	size := 0
 	total := 0
@@ -375,12 +375,12 @@ func (c *ChannelGroupConsume) StartConsume() {
 func (c *ChannelGroupConsume) consume() {
 	//runtime.LockOSThread()
 	//defer runtime.UnlockOSThread()
-	//defer func() {
-	//	err := recover()
-	//	if err != nil {
-	//		c.logger.Error("", zap.String("err", fmt.Sprintf("%v", err)))
-	//	}
-	//}()
+	defer func() {
+		err := recover()
+		if err != nil {
+			c.logger.Error("", zap.String("err", fmt.Sprintf("%v", err)))
+		}
+	}()
 	c.doneWg.Add(1)
 	defer c.doneWg.Done()
 
