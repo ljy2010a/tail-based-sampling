@@ -67,6 +67,69 @@ func (r *Receiver) Run() {
 	//		time.Sleep(1 * time.Minute)
 	//	}
 	//}()
+	//go func() {
+	//	if !r.AutoDetect {
+	//		return
+	//	}
+	//	i := 0
+	//	for {
+	//		if i > 20 {
+	//			return
+	//		}
+	//		b2Mb := func(b uint64) uint64 {
+	//			return b / 1024 / 1024
+	//		}
+	//		var m runtime.MemStats
+	//		runtime.ReadMemStats(&m)
+	//
+	//		r.logger.Info("MEM STAT",
+	//			zap.Int("times", i),
+	//			zap.Uint64("Alloc", b2Mb(m.Alloc)),
+	//			zap.Uint64("TotalAlloc", b2Mb(m.TotalAlloc)),
+	//			zap.Uint64("HeapInuse", b2Mb(m.HeapInuse)),
+	//			zap.Uint64("HeapAlloc", b2Mb(m.HeapAlloc)),
+	//			zap.Uint64("Sys", b2Mb(m.Sys)),
+	//			zap.Uint32("NumGC", m.NumGC),
+	//		)
+	//		i++
+	//		time.Sleep(1 * time.Second)
+	//	}
+	//}()
+
+	//r.tdSliceLimit = 100_0000
+	//r.tdSlice = make(chan *TData, r.tdSliceLimit)
+	//for i := int64(0); i < r.tdSliceLimit; i++ {
+	//	r.tdSlice <- NewTData()
+	//}
+
+	//r.tdSlice = make([]*TData, r.tdSliceLimit)
+	//for i := int64(0); i < r.tdSliceLimit; i++ {
+	//	r.tdSlice[i] = NewTData()
+	//}
+
+	//r.tdSendSliceLimit = 1_2000
+	//r.tdSendSlice = make([]*common.TraceData, r.tdSendSliceLimit)
+	//for i := int64(0); i < r.tdSendSliceLimit; i++ {
+	//	r.tdSendSlice[i] = &common.TraceData{
+	//		Source: r.HttpPort,
+	//		Sb:     make([][]byte, 0, 60),
+	//	}
+	//}
+
+	r.idToTrace = NewTDataMap()
+
+	r.deleteChan = make(chan string, 6000)
+	r.finishChan = make(chan interface{})
+	doneFunc := func() {
+	}
+	overFunc := func() {
+		close(r.finishChan)
+	}
+	r.consumer = NewChannelGroupConsume(r, doneFunc, overFunc)
+	r.consumer.StartConsume()
+
+	go r.finish()
+
 	go func() {
 		if !r.AutoDetect {
 			return
@@ -108,68 +171,6 @@ func (r *Receiver) Run() {
 			}
 		}
 	}()
-	//go func() {
-	//	if !r.AutoDetect {
-	//		return
-	//	}
-	//	i := 0
-	//	for {
-	//		if i > 20 {
-	//			return
-	//		}
-	//		b2Mb := func(b uint64) uint64 {
-	//			return b / 1024 / 1024
-	//		}
-	//		var m runtime.MemStats
-	//		runtime.ReadMemStats(&m)
-	//
-	//		r.logger.Info("MEM STAT",
-	//			zap.Int("times", i),
-	//			zap.Uint64("Alloc", b2Mb(m.Alloc)),
-	//			zap.Uint64("TotalAlloc", b2Mb(m.TotalAlloc)),
-	//			zap.Uint64("HeapInuse", b2Mb(m.HeapInuse)),
-	//			zap.Uint64("HeapAlloc", b2Mb(m.HeapAlloc)),
-	//			zap.Uint64("Sys", b2Mb(m.Sys)),
-	//			zap.Uint32("NumGC", m.NumGC),
-	//		)
-	//		i++
-	//		time.Sleep(1 * time.Second)
-	//	}
-	//}()
-
-	r.tdSliceLimit = 120_0000
-	//r.tdSlice = make(chan *TData, r.tdSliceLimit)
-	//for i := int64(0); i < r.tdSliceLimit; i++ {
-	//	r.tdSlice <- NewTData()
-	//}
-
-	r.tdSlice = make([]*TData, r.tdSliceLimit)
-	for i := int64(0); i < r.tdSliceLimit; i++ {
-		r.tdSlice[i] = NewTData()
-	}
-
-	//r.tdSendSliceLimit = 1_2000
-	//r.tdSendSlice = make([]*common.TraceData, r.tdSendSliceLimit)
-	//for i := int64(0); i < r.tdSendSliceLimit; i++ {
-	//	r.tdSendSlice[i] = &common.TraceData{
-	//		Source: r.HttpPort,
-	//		Sb:     make([][]byte, 0, 60),
-	//	}
-	//}
-
-	r.idToTrace = NewTDataMap()
-
-	r.deleteChan = make(chan string, 3000)
-	r.finishChan = make(chan interface{})
-	doneFunc := func() {
-	}
-	overFunc := func() {
-		close(r.finishChan)
-	}
-	r.consumer = NewChannelGroupConsume(r, doneFunc, overFunc)
-	r.consumer.StartConsume()
-
-	go r.finish()
 
 	frouter := fasthttprouter.New()
 	frouter.GET("/ready", func(ctx *fasthttp.RequestCtx) {
@@ -205,13 +206,11 @@ func (r *Receiver) SetParamHandler(ctx *fasthttp.RequestCtx) {
 
 	if r.HttpPort == "8000" {
 		dataUrl := fmt.Sprintf("http://127.0.0.1:%s/trace1.data", r.DataPort)
-		//go r.ReadHttp(dataUrl)
 		go r.consumer.Read(dataUrl)
 	}
 
 	if r.HttpPort == "8001" {
 		dataUrl2 := fmt.Sprintf("http://127.0.0.1:%s/trace2.data", r.DataPort)
-		//go r.ReadHttp(dataUrl2)
 		go r.consumer.Read(dataUrl2)
 	}
 	ctx.SetStatusCode(http.StatusOK)
@@ -241,11 +240,11 @@ func (r *Receiver) QueryWrongHandler(ctx *fasthttp.RequestCtx) {
 
 	//td := NewTData()
 
-	if nowPos := atomic.AddInt64(&r.tdSlicePos, 1); nowPos < r.tdSliceLimit {
-		td = r.tdSlice[nowPos]
-	} else {
-		td = NewTData()
-	}
+	//if nowPos := atomic.AddInt64(&r.tdSlicePos, 1); nowPos < r.tdSliceLimit {
+	//	td = r.tdSlice[nowPos]
+	//} else {
+	td = NewTData()
+	//}
 	td.Wrong = true
 	td.Status = common.TraceStatusWrongSet
 	ltd, lexist := r.idToTrace.LoadOrStore(id, td)
@@ -256,9 +255,6 @@ func (r *Receiver) QueryWrongHandler(ctx *fasthttp.RequestCtx) {
 			if over == "1" {
 				r.SendWrongRequest(id, ltd, "")
 			} else {
-				//reqPool.Submit(func() {
-				//	r.SendWrongRequest(id, ltd, r.CompactorSetWrongUrl, "")
-				//})
 				go func() {
 					r.SendWrongRequest(id, ltd, "")
 				}()
@@ -269,7 +265,8 @@ func (r *Receiver) QueryWrongHandler(ctx *fasthttp.RequestCtx) {
 	return
 }
 
-func (r *Receiver) ConsumeByte(lines []int, idToSpans map[string]*TData) {
+func (r *Receiver) ConsumeByte(lines []int) {
+	idToSpans := make(map[string]*TData, 1_0000)
 	for i, val := range lines {
 		start := val >> 16
 		llen := val & 0xffff
@@ -284,11 +281,11 @@ func (r *Receiver) ConsumeByte(lines []int, idToSpans map[string]*TData) {
 			//	td = NewTData()
 			//}
 			//td := NewTData()
-			if nowPos := atomic.AddInt64(&r.tdSlicePos, 1); nowPos < r.tdSliceLimit {
-				td = r.tdSlice[nowPos]
-			} else {
-				td = NewTData()
-			}
+			//if nowPos := atomic.AddInt64(&r.tdSlicePos, 1); nowPos < r.tdSliceLimit {
+			//	td = r.tdSlice[nowPos]
+			//} else {
+			td = NewTData()
+			//}
 			td.Wrong = IfSpanWrongString(line)
 			//td.Wrong = wrong
 			if i > 2_0000 && i < 23_0000 {
@@ -322,7 +319,6 @@ func (r *Receiver) ConsumeByte(lines []int, idToSpans map[string]*TData) {
 		if exist {
 			// 已存在
 			r.traceMiss++
-			//td.AddSpani(etd.Sbi)
 			td.Sbi = append(td.Sbi, etd.Sbi...)
 			if !td.Wrong && etd.Wrong {
 				td.Wrong = true
@@ -344,6 +340,7 @@ func (r *Receiver) ConsumeByte(lines []int, idToSpans map[string]*TData) {
 			case r.deleteChan <- id:
 				postDeletion = true
 			default:
+				//<-r.deleteChan
 				dropId, ok := <-r.deleteChan
 				if ok {
 					r.dropTraceById(dropId, "0")
@@ -354,14 +351,14 @@ func (r *Receiver) ConsumeByte(lines []int, idToSpans map[string]*TData) {
 }
 
 func (r *Receiver) dropTrace(id string, td *TData, over string) {
-	//atomic.AddInt64(&r.traceNums, 1)
-	//spLen := len(td.Sbi)
-	//if r.maxSpanNums < spLen {
-	//	r.maxSpanNums = spLen
-	//}
-	//if r.minSpanNums > spLen || r.minSpanNums == 0 {
-	//	r.minSpanNums = spLen
-	//}
+	atomic.AddInt64(&r.traceNums, 1)
+	spLen := len(td.Sbi)
+	if r.maxSpanNums < spLen {
+		r.maxSpanNums = spLen
+	}
+	if r.minSpanNums > spLen || r.minSpanNums == 0 {
+		r.minSpanNums = spLen
+	}
 	wrong := td.Wrong
 	//if !wrong {
 	//	_, ok := r.wrongIdMap.Load(id)
@@ -556,37 +553,38 @@ func IfSpanWrongString(line []byte) bool {
 	//return false
 
 	l := common.BytesToString(line)
-	llen := len(l)
-	//if strings.Contains(l, "error=1") {
-	//	return true
-	//}
+	//llen := len(l)
+	if strings.Contains(l, "error=1") {
+		return true
+	}
 	pos := strings.Index(l, "http.status_code=")
 	if pos == -1 {
 		//if strings.Contains(l, "error=1") {
 		//	return true
 		//}
-		if l[llen-7] != 'e' {
-			return false
-		}
-		if l[llen-6] != 'r' {
-			return false
-		}
-		if l[llen-5] != 'r' {
-			return false
-		}
-		if l[llen-4] != 'o' {
-			return false
-		}
-		if l[llen-3] != 'r' {
-			return false
-		}
-		if l[llen-2] != '=' {
-			return false
-		}
-		if l[llen-1] != '1' {
-			return false
-		}
-		return true
+		return false
+		//if l[llen-7] != 'e' {
+		//	return false
+		//}
+		//if l[llen-6] != 'r' {
+		//	return false
+		//}
+		//if l[llen-5] != 'r' {
+		//	return false
+		//}
+		//if l[llen-4] != 'o' {
+		//	return false
+		//}
+		//if l[llen-3] != 'r' {
+		//	return false
+		//}
+		//if l[llen-2] != '=' {
+		//	return false
+		//}
+		//if l[llen-1] != '1' {
+		//	return false
+		//}
+		//return true
 		//return false
 	}
 	if l[pos+17] != '2' {
@@ -599,8 +597,4 @@ func IfSpanWrongString(line []byte) bool {
 		return true
 	}
 	return false
-	//if l[pos+17:pos+20] != "200" {
-	//	return true
-	//}
-	//return false
 }

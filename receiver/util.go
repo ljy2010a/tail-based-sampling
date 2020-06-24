@@ -145,7 +145,7 @@ type TData struct {
 
 func NewTData() *TData {
 	return &TData{
-		Sbi: make([]int, 0, 60),
+		Sbi: make([]int, 0, 100),
 	}
 }
 

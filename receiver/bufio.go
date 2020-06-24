@@ -93,13 +93,10 @@ var errNegativeRead = errors.New("bufio: reader returned negative count from Rea
 // fill reads a new chunk into the buffer.
 func (b *Reader) fill() {
 	//fmt.Println("fill", b.w, b.readBufSize)
-	// Slide existing data to beginning.
 	if b.w+b.readBufSize > b.bufSize {
 		fmt.Println("move", time.Now().UnixNano()/1e6, b.w)
-		//copy(b.buf, b.buf[b.r:b.w])
-		//time.Sleep(500 * time.Millisecond)
-		//b.w -= b.r
-		b.w = 0
+		copy(b.buf, b.buf[b.r:b.w])
+		b.w -= b.r
 		b.r = 0
 	}
 
@@ -117,15 +114,15 @@ func (b *Reader) fill() {
 	b.w += n
 	if err != nil {
 		b.err = err
-		fmt.Printf("read err=%v n=%d \n", err, n)
+		//fmt.Printf("read err=%v n=%d \n", err, n)
 		return
 	}
 	if n > 0 {
-		fmt.Printf("read n=%d \n", n)
+		//fmt.Printf("read n=%d \n", n)
 		return
 	}
 	//}
-	b.err = io.ErrNoProgress
+	//b.err = io.ErrNoProgress
 }
 
 func (b *Reader) readErr() error {
@@ -404,59 +401,17 @@ func (b *Reader) ReadSlicePos() (start, llen int, err error) {
 		//	}
 		//}
 
-		//if i := bytes.IndexByte(b.buf[b.r:b.w], '\n'); i >= 0 {
-		//	start = b.r
-		//	llen = i + 1
-		//	b.r += i + 1
-		//	break
-		//}
-
-		// Pending error?
-		if b.err != nil {
-			//line = b.buf[b.r:b.w]
-			b.r = b.w
-			err = b.readErr()
+		if i := bytes.IndexByte(b.buf[b.r:b.w], '\n'); i >= 0 {
+			start = b.r
+			llen = i + 1
+			b.r += i + 1
 			break
 		}
 
-		//// Buffer full?
-		//if b.Buffered() >= len(b.buf) {
-		//	b.r = b.w
-		//	line = b.buf
-		//	err = ErrBufferFull
-		//	break
-		//}
-
-		//s = b.w - b.r // do not rescan area we scanned before
-
-		b.fill() // buffer is not full
-	}
-
-	// Handle last byte, if any.
-	//if i := len(line) - 1; i >= 0 {
-	//	b.lastByte = int(line[i])
-	//	b.lastRuneSize = -1
-	//}
-
-	return
-}
-
-func (b *Reader) PureRead() (start, llen int, err error) {
-	//s := 0 // search start index
-	for {
-		//if i := bytes.IndexByte(b.buf[b.r:b.w], '\n'); i >= 0 {
-		//	//i += s
-		//	//line = b.buf[b.r : b.r+i+1]
-		//	start = b.r
-		//	llen = i + 1
-		//	b.r += i + 1
-		//	break
-		//}
-
 		// Pending error?
 		if b.err != nil {
 			//line = b.buf[b.r:b.w]
-			b.r = b.w
+			//b.r = b.w
 			err = b.readErr()
 			break
 		}

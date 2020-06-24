@@ -9,6 +9,7 @@ import (
 	"github.com/valyala/fasthttp"
 	"go.uber.org/zap"
 	"net/http"
+	"os"
 	"sort"
 	"strings"
 	"sync"
@@ -17,10 +18,11 @@ import (
 )
 
 type Compactor struct {
-	HttpPort  string // 8003
-	DataPort  string // 8081
-	ReportUrl string
-	logger    *zap.Logger
+	HttpPort   string // 8003
+	DataPort   string // 8081
+	ReportUrl  string
+	AutoDetect bool
+	logger     *zap.Logger
 
 	finishChan  chan interface{}
 	checkSumMap map[string]string
@@ -46,8 +48,11 @@ func (r *Compactor) Run() {
 				r.logger.Info("too long to stop")
 				close(r.finishChan)
 				r.finish()
-				return
 			}
+			if i > 3 {
+				os.Exit(-1)
+			}
+
 			i++
 			r.logger.Info("sleep",
 				zap.String("port", r.HttpPort),
@@ -57,6 +62,9 @@ func (r *Compactor) Run() {
 		}
 	}()
 	go func() {
+		if !r.AutoDetect {
+			return
+		}
 		time.Sleep(5 * time.Second)
 		if r.DataPort != "" {
 			r.logger.Info("has dataport")
@@ -220,7 +228,7 @@ func (r *Compactor) finish() {
 		sb.WriteString(td.Id)
 		sb.WriteString("\":\"")
 		sb.WriteString(td.Md5)
-		sb.WriteString("-")
+		//sb.WriteString("-")
 		sb.WriteString("\"")
 		//if td.Id == "c074d0a90cd607b" {
 		//	r.logger.Info("example checksum",
