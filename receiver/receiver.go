@@ -115,7 +115,7 @@ func (r *Receiver) Run() {
 
 	r.idPool = make(chan map[string]*TData, 110)
 	for i := int64(0); i < 100; i++ {
-		r.idPool <- make(map[string]*TData, 9000)
+		r.idPool <- make(map[string]*TData, 10000)
 	}
 
 	r.idToTrace = NewTDataMap()
@@ -260,9 +260,9 @@ func (r *Receiver) ConsumeByte(lines []int) {
 	select {
 	case idToSpans = <-r.idPool:
 	default:
-		idToSpans = make(map[string]*TData, 9000)
+		idToSpans = make(map[string]*TData, 10000)
 	}
-	//idToSpans := make(map[string]*TData, 9000)
+	//idToSpans := make(map[string]*TData, 10000)
 	for i, val := range lines {
 		start := val >> 16
 		llen := val & 0xffff

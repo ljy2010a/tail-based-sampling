@@ -123,17 +123,17 @@ func (c *ChannelGroupConsume) Read(dataUrl string) {
 		downTaskChan <- hi
 	}
 
-	//for i := 0; i < 1; i++ {
-	//	go func() {
-	//		for hi := range downTaskChan {
-	//			if !hbs[hi].exitRead {
-	//				//logger.Info("rush", zap.Int("seq", hbs[hi].Seq))
-	//				hbs[hi].wg.Add(1)
-	//				hbs[hi].asyncfill()
-	//			}
-	//		}
-	//	}()
-	//}
+	for i := 0; i < 1; i++ {
+		go func() {
+			for hi := range downTaskChan {
+				if !hbs[hi].exitRead {
+					//logger.Info("rush", zap.Int("seq", hbs[hi].Seq))
+					hbs[hi].wg.Add(1)
+					hbs[hi].asyncfill()
+				}
+			}
+		}()
+	}
 	for hi, hb := range hbs {
 		hb.exitRead = true
 		close(hb.readSignal)
