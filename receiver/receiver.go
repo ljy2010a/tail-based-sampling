@@ -98,16 +98,11 @@ func (r *Receiver) Run() {
 	//	}
 	//}()
 
-	//r.tdSliceLimit = 100_0000
-	//r.tdSlice = make(chan *TData, r.tdSliceLimit)
-	//for i := int64(0); i < r.tdSliceLimit; i++ {
-	//	r.tdSlice <- NewTData()
-	//}
-
-	//r.tdSlice = make([]*TData, r.tdSliceLimit)
-	//for i := int64(0); i < r.tdSliceLimit; i++ {
-	//	r.tdSlice[i] = NewTData()
-	//}
+	r.tdSliceLimit = 100_0000
+	r.tdSlice = make([]*TData, r.tdSliceLimit)
+	for i := int64(0); i < r.tdSliceLimit; i++ {
+		r.tdSlice[i] = NewTData()
+	}
 
 	//r.tdSendSliceLimit = 1_2000
 	//r.tdSendSlice = make([]*common.TraceData, r.tdSendSliceLimit)
@@ -291,12 +286,11 @@ func (r *Receiver) ConsumeByte(lines []int) {
 		//id := GetTraceIdByString(line)
 		if etd, ok := idToSpans[id]; !ok {
 			var td *TData
-			//td := NewTData()
-			//if nowPos := atomic.AddInt64(&r.tdSlicePos, 1); nowPos < r.tdSliceLimit {
-			//	td = r.tdSlice[nowPos]
-			//} else {
-			td = NewTData()
-			//}
+			if nowPos := atomic.AddInt64(&r.tdSlicePos, 1); nowPos < r.tdSliceLimit {
+				td = r.tdSlice[nowPos]
+			} else {
+				td = NewTData()
+			}
 			//td.Wrong = IfSpanWrongString(line)
 			td.Wrong = wrong
 			if i > 2_0000 && i < 23_0000 {

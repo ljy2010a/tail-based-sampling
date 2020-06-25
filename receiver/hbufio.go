@@ -28,7 +28,13 @@ func (b *HttpBlock) fill() {
 func (b *HttpBlock) asyncfill() {
 	btime := time.Now()
 	defer func() {
-		logger.Info("async done", zap.Int("seq", b.Seq))
+		logger.Info("async done",
+			zap.Int("seq", b.Seq),
+			zap.Int("b.w", b.w),
+			zap.Int("b.BufEnd", b.BufEnd),
+			zap.Bool("all from async", b.w == b.BufEnd),
+			zap.Duration("cost", time.Since(btime)),
+		)
 		b.wg.Done()
 	}()
 	for {
@@ -38,18 +44,17 @@ func (b *HttpBlock) asyncfill() {
 			return
 		default:
 			//logger.Info("async read")
-			n, err := io.ReadAtLeast(b.rd, b.buf[b.w:], 16*1024*1024)
-			//n, err := b.rd.Read(b.buf[b.w:])
+			//n, err := io.ReadAtLeast(b.rd, b.buf[b.w:], 16*1024*1024)
+			n, err := b.rd.Read(b.buf[b.w:])
 			b.w += n
 			if err != nil {
-				//b.w = b.BufEnd
 				b.err = err
-				logger.Info("rush done",
-					zap.Error(err),
-					zap.Int("seq", b.Seq),
-					zap.Int("b.w", b.w),
-					zap.Duration("cost", time.Since(btime)),
-				)
+				//logger.Info("rush done",
+				//	zap.Error(err),
+				//	zap.Int("seq", b.Seq),
+				//	zap.Int("b.w", b.w),
+				//	zap.Duration("cost", time.Since(btime)),
+				//)
 				return
 			}
 			if n > 0 {
