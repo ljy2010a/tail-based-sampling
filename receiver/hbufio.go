@@ -4,7 +4,6 @@ import (
 	"bytes"
 	"go.uber.org/zap"
 	"io"
-	"runtime"
 	"time"
 )
 
@@ -59,7 +58,7 @@ func (b *HttpBlock) asyncfill() {
 			}
 			if n > 0 {
 				//logger.Info("read ", zap.Int("b.w", b.w))
-				runtime.Gosched()
+				//runtime.Gosched()
 				continue
 			}
 		}

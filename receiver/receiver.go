@@ -47,6 +47,7 @@ type Receiver struct {
 	//tdSendSliceLimit int64
 
 	idPool chan map[string]*TData
+	//idPool chan map[string]int64
 }
 
 func (r *Receiver) Run() {
@@ -56,26 +57,7 @@ func (r *Receiver) Run() {
 	//go func() {
 	//	i := 0
 	//	for {
-	//		if i > 2 {
-	//			r.logger.Info("too long to stop")
-	//			time.Sleep(10 * time.Second)
-	//			os.Exit(0)
-	//		}
-	//		i++
-	//		r.logger.Info("sleep",
-	//			zap.String("port", r.HttpPort),
-	//			zap.Int("i", i),
-	//		)
-	//		time.Sleep(1 * time.Minute)
-	//	}
-	//}()
-	//go func() {
-	//	if !r.AutoDetect {
-	//		return
-	//	}
-	//	i := 0
-	//	for {
-	//		if i > 20 {
+	//		if i > 10 {
 	//			return
 	//		}
 	//		b2Mb := func(b uint64) uint64 {
@@ -98,7 +80,7 @@ func (r *Receiver) Run() {
 	//	}
 	//}()
 
-	r.tdSliceLimit = 100_0000
+	r.tdSliceLimit = 90_0000
 	r.tdSlice = make([]*TData, r.tdSliceLimit)
 	for i := int64(0); i < r.tdSliceLimit; i++ {
 		r.tdSlice[i] = NewTData()
@@ -113,8 +95,9 @@ func (r *Receiver) Run() {
 	//	}
 	//}
 
-	r.idPool = make(chan map[string]*TData, 110)
-	for i := int64(0); i < 100; i++ {
+	var poolNum int64 = 110
+	r.idPool = make(chan map[string]*TData, poolNum)
+	for i := int64(0); i < poolNum; i++ {
 		r.idPool <- make(map[string]*TData, 10000)
 	}
 
@@ -131,48 +114,6 @@ func (r *Receiver) Run() {
 	r.consumer.StartConsume()
 
 	go r.finish()
-
-	go func() {
-		if !r.AutoDetect {
-			return
-		}
-		time.Sleep(5 * time.Second)
-		if r.DataPort != "" {
-			r.logger.Info("has dataport")
-			return
-		}
-		r.logger.Info("try to detect")
-
-		port := 8000
-		for i := 0; i < 2000; i++ {
-			port++
-			dataUrl := fmt.Sprintf("http://127.0.0.1:%d/trace1.data", port)
-			resp, err := http.Get(dataUrl)
-			if err != nil {
-				continue
-			}
-			resp.Body.Close()
-			r.logger.Info("detect port",
-				zap.Int("port", port),
-				zap.Int("code", resp.StatusCode),
-			)
-
-			if resp.StatusCode == 200 && r.HttpPort == "8000" {
-				r.DataPort = fmt.Sprintf("%d", port)
-
-				dataUrl := fmt.Sprintf("http://127.0.0.1:%s/trace1.data", r.DataPort)
-				go r.consumer.Read(dataUrl)
-				return
-			}
-
-			if resp.StatusCode == 200 && r.HttpPort == "8001" {
-				r.DataPort = fmt.Sprintf("%d", port)
-				dataUrl2 := fmt.Sprintf("http://127.0.0.1:%s/trace2.data", r.DataPort)
-				go r.consumer.Read(dataUrl2)
-				return
-			}
-		}
-	}()
 
 	frouter := fasthttprouter.New()
 	frouter.GET("/ready", func(ctx *fasthttp.RequestCtx) {
@@ -229,7 +170,6 @@ func (r *Receiver) QueryWrongHandler(ctx *fasthttp.RequestCtx) {
 	//	)
 	//}
 	var td *TData
-
 	//if nowPos := atomic.AddInt64(&r.tdSlicePos, 1); nowPos < r.tdSliceLimit {
 	//	td = r.tdSlice[nowPos]
 	//} else {
@@ -255,6 +195,7 @@ func (r *Receiver) QueryWrongHandler(ctx *fasthttp.RequestCtx) {
 	return
 }
 
+//func (r *Receiver) ConsumeByte(lines []int, idToSpans2 map[string]*TData, tdSlicePos *int64, tdSlice []*TData) {
 func (r *Receiver) ConsumeByte(lines []int) {
 	var idToSpans map[string]*TData
 	select {
@@ -267,39 +208,41 @@ func (r *Receiver) ConsumeByte(lines []int) {
 		start := val >> 16
 		llen := val & 0xffff
 		line := r.consumer.lineBlock[start : start+llen]
-		//id, wrong := GetTraceIdWrongByByte(line)
+		//GetTraceIdByString(line)
+		//IfSpanWrongString(line)
+		//continue
 		id := GetTraceIdByString(line)
 		if etd, ok := idToSpans[id]; !ok {
 			var td *TData
-			if nowPos := atomic.AddInt64(&r.tdSlicePos, 1); nowPos < r.tdSliceLimit {
+			nowPos := atomic.AddInt64(&r.tdSlicePos, 1)
+			if nowPos < r.tdSliceLimit {
 				td = r.tdSlice[nowPos]
 			} else {
 				td = NewTData()
 			}
 			td.Wrong = IfSpanWrongString(line)
-			//td.Wrong = wrong
 			if i > 2_0000 && i < 23_0000 {
 				td.Status = common.TraceStatusSkip
 			}
 			td.Sbi = append(td.Sbi, val)
+			//idToSpans[id] = nowPos
 			idToSpans[id] = td
 		} else {
+			//etd := r.tdSlice[etdp]
 			if !etd.Wrong && IfSpanWrongString(line) {
 				etd.Wrong = true
 			}
-			//if !etd.Wrong && wrong {
-			//	etd.Wrong = true
-			//}
 			etd.Sbi = append(etd.Sbi, val)
 		}
 	}
 
-	mapSize := len(idToSpans)
-	if mapSize > r.mapMaxSize {
-		r.mapMaxSize = mapSize
-	}
+	//mapSize := len(idToSpans)
+	//if mapSize > r.mapMaxSize {
+	//	r.mapMaxSize = mapSize
+	//}
 
 	for id, etd := range idToSpans {
+		//etd := r.tdSlice[etdp]
 		if etd.Status == common.TraceStatusSkip && etd.Wrong {
 			r.traceSkip++
 			r.dropTrace(id, etd, "0")
@@ -341,28 +284,17 @@ func (r *Receiver) ConsumeByte(lines []int) {
 }
 
 func (r *Receiver) dropTrace(id string, td *TData, over string) {
-	atomic.AddInt64(&r.traceNums, 1)
-	spLen := len(td.Sbi)
-	if r.maxSpanNums < spLen {
-		r.maxSpanNums = spLen
-	}
-	if r.minSpanNums > spLen || r.minSpanNums == 0 {
-		r.minSpanNums = spLen
-	}
-	wrong := td.Wrong
-	//if !wrong {
-	//	_, ok := r.wrongIdMap.Load(id)
-	//	if ok {
-	//		wrong = true
-	//		r.wrongHit++
-	//	}
+	//atomic.AddInt64(&r.traceNums, 1)
+	//spLen := len(td.Sbi)
+	//if r.maxSpanNums < spLen {
+	//	r.maxSpanNums = spLen
 	//}
-	//wrong = false
+	//if r.minSpanNums > spLen || r.minSpanNums == 0 {
+	//	r.minSpanNums = spLen
+	//}
+	wrong := td.Wrong
 	if wrong && td.Status != common.TraceStatusSended {
 		td.Status = common.TraceStatusSended
-		//reqPool.Submit(func() {
-		//	r.SendWrongRequest(id, td, r.CompactorSetWrongUrl, over)
-		//})
 		go r.SendWrongRequest(id, td, over)
 		return
 	} else {
@@ -414,6 +346,7 @@ func (r *Receiver) finish() {
 		zap.Int("maxSpLen", r.maxSpanNums),
 		zap.Int("minSpanNums", r.minSpanNums),
 		zap.Int("mapMaxSize", r.mapMaxSize),
+		zap.Int64("tdSlicePos", r.tdSlicePos),
 		zap.Int("traceMiss", r.traceMiss),
 		zap.Int("traceSkip", r.traceSkip),
 		zap.Int("wrongHit", r.wrongHit),
@@ -426,67 +359,6 @@ var (
 	FCode200 = []byte("http.status_code=200")
 	Ferr1    = []byte("error=1")
 )
-
-func GetTraceIdWrongByString(line []byte) (string, bool) {
-	//firstIdx := bytes.IndexByte(line, '|')
-	//id := common.BytesToString(line[:firstIdx])
-	l := common.BytesToString(line)
-	id := l[:strings.IndexByte(l, '|')]
-	llen := len(l)
-	pos := strings.Index(l, "http.status_code=")
-	if pos == -1 {
-		//if strings.Contains(l, "error=1") {
-		//	return id, true
-		//}
-		if l[llen-7] != 'e' {
-			return id, false
-		}
-		if l[llen-6] != 'r' {
-			return id, false
-		}
-		if l[llen-5] != 'r' {
-			return id, false
-		}
-		if l[llen-4] != 'o' {
-			return id, false
-		}
-		if l[llen-3] != 'r' {
-			return id, false
-		}
-		if l[llen-2] != '=' {
-			return id, false
-		}
-		if l[llen-1] != '1' {
-			return id, false
-		}
-		return id, true
-	}
-
-	if l[pos+17] != '2' {
-		return id, true
-	}
-	if l[pos+18] != '0' {
-		return id, true
-	}
-	if l[pos+19] != '0' {
-		return id, true
-	}
-	return id, false
-
-	//return id, !strings.EqualFold(l[pos+17:pos+20], "200")
-	//if strings.Contains(l, "error=1") {
-	//	return id, true
-	//}
-	//
-	//pos := strings.Index(l, "http.status_code=")
-	//if pos == -1 {
-	//	return id, false
-	//}
-	//if l[pos+17:pos+20] != "200" {
-	//	return id, true
-	//}
-	//return id, false
-}
 
 func GetTraceIdWrongByByte(l []byte) (string, bool) {
 	//firstIdx := bytes.IndexByte(l, '|')
@@ -632,28 +504,13 @@ func GetTraceIdWrongByByte(l []byte) (string, bool) {
 
 }
 
-func GetTraceIdByByte(line []byte) string {
-	firstIdx := bytes.IndexByte(line, '|')
-	return common.BytesToString(line[:firstIdx])
-}
-
-func IfSpanWrongByte(line []byte) bool {
-	if bytes.Contains(line, Ferr1) {
-		return true
-	}
-	if bytes.Contains(line, FCode) && !bytes.Contains(line, FCode200) {
-		return true
-	}
-	return false
-}
-
 func GetTraceIdByString(line []byte) string {
 	l := common.BytesToString(line)
 	return l[:strings.IndexByte(l, '|')]
 }
 
-func IfSpanWrongString(line []byte) bool {
-	l := common.BytesToString(line)
+func IfSpanWrongString(l []byte) bool {
+	//l := common.BytesToString(line)
 	//pos := strings.Index(l, "http.status_code=")
 	//if pos == -1 {
 	//	if strings.Contains(l, "error=1") {
@@ -672,10 +529,13 @@ func IfSpanWrongString(line []byte) bool {
 	//}
 	//return strings.Contains(l, "error=1")
 
-	tagPos := 0
+	tagPos := 32
 	httpHit := false
+	//bytes.IndexByte(l[64:], '&')
+	//bytes.IndexByte(l[165:], '&')
+	//tagPos = 192
 	for {
-		p := strings.IndexByte(l[tagPos:], '&')
+		p := bytes.IndexByte(l[tagPos:], '&')
 		if p == -1 {
 			//error=1
 			llen := len(l)
@@ -715,26 +575,33 @@ func IfSpanWrongString(line []byte) bool {
 			}
 			return false
 		} else {
+			//if tagPos != 64 && p != 20 && p != 7 {
+			//	//fmt.Println("s",tagPos,p)
+			//	tagPos += p + 1
+			//	continue
+			//}
+			//fmt.Println(tagPos,p)
 			tagPos += p + 1
 			// http.status_code=
 			//fmt.Println(string(l[tagPos-21:tagPos-4]), string(l[tagPos-21]), string(l[tagPos-4]), string(l[tagPos-3]), string(l[tagPos-2]))
 			if l[tagPos-21] == 'h' &&
-				l[tagPos-20] == 't' &&
-				l[tagPos-19] == 't' &&
-				l[tagPos-18] == 'p' &&
-				l[tagPos-17] == '.' &&
-				l[tagPos-16] == 's' &&
+				//l[tagPos-20] == 't' &&
+				//l[tagPos-19] == 't' &&
+				//l[tagPos-18] == 'p' &&
+				//l[tagPos-17] == '.' &&
+				//l[tagPos-16] == 's' &&
 				l[tagPos-15] == 't' &&
-				l[tagPos-14] == 'a' &&
-				l[tagPos-13] == 't' &&
-				l[tagPos-12] == 'u' &&
-				l[tagPos-11] == 's' &&
-				l[tagPos-10] == '_' &&
-				l[tagPos-9] == 'c' &&
+				//l[tagPos-14] == 'a' &&
+				//l[tagPos-13] == 't' &&
+				//l[tagPos-12] == 'u' &&
+				//l[tagPos-11] == 's' &&
+				//l[tagPos-10] == '_' &&
+				//l[tagPos-9] == 'c' &&
 				l[tagPos-8] == 'o' &&
-				l[tagPos-7] == 'd' &&
-				l[tagPos-6] == 'e' &&
-				l[tagPos-5] == '=' && !httpHit {
+				//l[tagPos-7] == 'd' &&
+				//l[tagPos-6] == 'e' &&
+				l[tagPos-5] == '=' &&
+				!httpHit {
 				if l[tagPos-4] == '2' &&
 					l[tagPos-3] == '0' &&
 					l[tagPos-2] == '0' {

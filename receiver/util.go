@@ -123,7 +123,7 @@ func (r *Receiver) warmUp(wg sync.WaitGroup) {
 	defer fasthttp.ReleaseResponse(resp)
 
 	if err := c.Do(req, resp); err != nil {
-		r.logger.Info("send notify fin",
+		r.logger.Info("send warm up",
 			zap.Error(err),
 		)
 		return
@@ -190,7 +190,7 @@ func NewTDataMap() *TDataMap {
 	m := &TDataMap{shards: make([]*TDataMapShard, shardNum)}
 	for i := 0; i < shardNum; i++ {
 		m.shards[i] = &TDataMapShard{
-			tdMap: make(map[string]*TData, 8000),
+			tdMap: make(map[string]*TData, 7000),
 			mu:    sync.RWMutex{},
 		}
 	}
@@ -202,13 +202,13 @@ type TDataMap struct {
 }
 
 func (t *TDataMap) Load(id string) (*TData, bool) {
-	//shard := t.shards[fnv64(id)&shardNum1]
+	//shard := t.shards[uint(fnv32(id))&shardNum1]
 	shard := t.shards[uint(fnv32(id))%uint(shardNum)]
 	return shard.Load(id)
 }
 
 func (t *TDataMap) LoadOrStore(id string, val *TData) (*TData, bool) {
-	//shard := t.shards[fnv64(id)&shardNum1]
+	//shard := t.shards[uint(fnv32(id))&shardNum1]
 	shard := t.shards[uint(fnv32(id))%uint(shardNum)]
 	return shard.LoadOrStore(id, val)
 }

@@ -38,14 +38,12 @@ func main() {
 			HttpPort:             httpPort,
 			CompactorPort:        "8002",
 			CompactorSetWrongUrl: fmt.Sprintf("http://127.0.0.1:8002/sw"),
-			//AutoDetect:           true,
 		}
 		runtime.GOMAXPROCS(2)
 		receiver.Run()
 	} else if httpPort == "8002" {
 		compactor := compactor.Compactor{
 			HttpPort: httpPort,
-			//AutoDetect: true,
 		}
 		runtime.GOMAXPROCS(1 * 4)
 		compactor.Run()

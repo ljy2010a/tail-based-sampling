@@ -1,10 +1,8 @@
 package receiver
 
 import (
-	"bytes"
-	"github.com/ljy2010a/tailf-based-sampling/common"
+	"fmt"
 	"math/rand"
-	"strings"
 	"testing"
 	"time"
 )
@@ -112,40 +110,54 @@ func RandStringBytesMaskImprSrc(n int) []byte {
 }
 
 var (
-	//s := []byte("1d37a8b17db8568b|1589285985482007|3d1e7e1147c1895d|1d37a8b17db8568b|1259|InventoryCenter|/api/traces|192.168.0.2|http.status_code=200&http.url=http://tracing.console.aliyun.com/getOrder&component=java-web-servlet&span.kind=server&http.method=GET")
-	s   = []byte("11be9afcc016ee02|1589285988534901|7068da59f571fbb9|710dfde81d01f3c2|928|PromotionCenter|DoCheckApplicationExist|192.168.91.202|db.instance=db&component=java-jdbc&db.type=h2&span.kind=client&__sql_id=1x7lx2l&peer.address=localhost:8082&error=1")
-	ss  = []byte("11be9afcc016ee02|1589285988534901|7068da59f571fbb9|710dfde81d01f3c2|928|PromotionCenter|DoCheckApplicationExist|192.168.91.202|db.instance=db&component=java-jdbc&db.type=h2&span.kind=client&__sql_id=1x7lx2l&peer.address=localhost:8082&error=1\n11be9afcc016ee02|1589285988534901|7068da59f571fbb9|710dfde81d01f3c2|928|PromotionCenter|DoCheckApplicationExist|192.168.91.202|db.instance=db&component=java-jdbc&db.type=h2&span.kind=client&__sql_id=1x7lx2l&peer.address=localhost:8082&error=1\n11be9afcc016ee02|1589285988534901|7068da59f571fbb9|710dfde81d01f3c2|928|PromotionCenter|DoCheckApplicationExist|192.168.91.202|db.instance=db&component=java-jdbc&db.type=h2&span.kind=client&__sql_id=1x7lx2l&peer.address=localhost:8082&error=1")
-	ssa = make([]byte, 1024*1024*1024)
+	s  = []byte("11be9afcc016ee02|1589285985482007|3d1e7e1147c1895d|1d37a8b17db8568b|1259|InventoryCenter|/api/traces|192.168.0.2|http.status_code=200&http.url=http://tracing.console.aliyun.com/getOrder&component=java-web-servlet&span.kind=server&http.method=GET")
+	s1 = []byte("11be9afcc016ee02|1589285985482007|3d1e7e1147c1895d|1d37a8b17db8568b|1259|InventoryCenter|/api/traces|192.168.0.2|http.url=http://tracing.console.aliyun.com/getOrder&component=java-web-servlet&http.status_code=200&span.kind=server&http.method=GET")
+	s2 = []byte("11be9afcc016ee02|1589285985482007|3d1e7e1147c1895d|1d37a8b17db8568b|1259|InventoryCenter|/api/traces|192.168.0.2|http.url=http://tracing.console.aliyun.com/getOrder&component=java-web-servlet&span.kind=server&http.method=GET&http.status_code=200")
+
+	e1 = []byte("11be9afcc016ee02|1589285988534901|7068da59f571fbb9|710dfde81d01f3c2|928|PromotionCenter|DoCheckApplicationExist|192.168.91.202|error=1&db.instance=db&component=java-jdbc&db.type=h2&span.kind=client&__sql_id=1x7lx2l&peer.address=localhost:8082")
+	e2 = []byte("11be9afcc016ee02|1589285988534901|7068da59f571fbb9|710dfde81d01f3c2|928|PromotionCenter|DoCheckApplicationExist|192.168.91.202|db.instance=db&error=1&component=java-jdbc&db.type=h2&span.kind=client&__sql_id=1x7lx2l&peer.address=localhost:8082")
+	e3 = []byte("11be9afcc016ee02|1589285988534901|7068da59f571fbb9|710dfde81d01f3c2|928|PromotionCenter|DoCheckApplicationExist|192.168.91.202|db.instance=db&component=java-jdbc&db.type=h2&span.kind=client&__sql_id=1x7lx2l&peer.address=localhost:8082&error=1\n")
+
+	he1 = []byte("11be9afcc016ee02|1589285988534901|7068da59f571fbb9|710dfde81d01f3c2|928|PromotionCenter|DoCheckApplicationExist|192.168.91.202|http.status_code=201&db.instance=db&component=java-jdbc&db.type=h2&span.kind=client&__sql_id=1x7lx2l&peer.address=localhost:8082")
+	he2 = []byte("11be9afcc016ee02|1589285988534901|7068da59f571fbb9|710dfde81d01f3c2|928|PromotionCenter|DoCheckApplicationExist|192.168.91.202|db.instance=db&http.status_code=201&component=java-jdbc&db.type=h2&span.kind=client&__sql_id=1x7lx2l&peer.address=localhost:8082")
+	he3 = []byte("11be9afcc016ee02|1589285988534901|7068da59f571fbb9|710dfde81d01f3c2|928|PromotionCenter|DoCheckApplicationExist|192.168.91.202|db.instance=db&component=java-jdbc&db.type=h2&span.kind=client&__sql_id=1x7lx2l&peer.address=localhost:8082&http.status_code=201")
+
+	hh = []byte("80f2481e92da39a|1592840906715039|1284072d6e59970f|3d89709e6af8cdcf|1376|Frontend|checkAndRefresh|192.168.50.207|&component=java-web-servlet&span.kind=server&http.url=http://tracing.console.aliyun.com/updateInventory&bizErr=1-failUpdateInventory&http.method=GET&&error=1\n")
 )
 
-func BenchmarkByteIndex(b *testing.B) {
-	b.ResetTimer()
-	b.ReportAllocs()
-	copy(ssa[99999:], ss)
-	for n := 0; n < b.N; n++ {
-		bytes.IndexByte(ssa[99999:99999+1000], '\n')
-		//for _, k := range ss[130:] {
-		//	if k == '\n' {
-		//		break
-		//	}
-		//}
-	}
-}
+func Test_aa(t *testing.T) {
+	//fmt.Println([]byte("http.status_code="))
+	//fmt.Println(GetTraceIdWrongByString(s))
+	//fmt.Println(GetTraceIdWrongByString(s2))
 
-func BenchmarkStringIndex(b *testing.B) {
-	b.ResetTimer()
-	b.ReportAllocs()
-	for n := 0; n < b.N; n++ {
-		strings.IndexByte(common.BytesToString(ss[130:350]), '\n')
-	}
-}
+	//fmt.Println(GetTraceIdWrongByByte(hh))
 
-//func Test_aa(t *testing.T) {
-//	fmt.Println(GetTraceIdWrongByString(s))
-//}
+	//fmt.Println(GetTraceIdWrongByByte(s))
+	//fmt.Println(GetTraceIdWrongByByte(s1))
+	//fmt.Println(GetTraceIdWrongByByte(s2))
+	//
+	//fmt.Println(GetTraceIdWrongByByte(e1))
+	//fmt.Println(GetTraceIdWrongByByte(e2))
+	//fmt.Println(GetTraceIdWrongByByte(e3))
+	//
+	//fmt.Println(GetTraceIdWrongByByte(he1))
+	//fmt.Println(GetTraceIdWrongByByte(he2))
+	//fmt.Println(GetTraceIdWrongByByte(he3))
+
+	//fmt.Println(IfSpanWrongString(s))
+	fmt.Println(IfSpanWrongString(s1))
+	//fmt.Println(IfSpanWrongString(s2))
+
+	//fmt.Println(IfSpanWrongString(e1))
+	//fmt.Println(IfSpanWrongString(e2))
+	//fmt.Println(IfSpanWrongString(e3))
+	//
+	//fmt.Println(IfSpanWrongString(he1))
+	//fmt.Println(IfSpanWrongString(he2))
+	//fmt.Println(IfSpanWrongString(he3))
+}
 
 //func BenchmarkGetTraceIdWrongByString(b *testing.B) {
-//
 //	b.ResetTimer()
 //	b.ReportAllocs()
 //	for n := 0; n < b.N; n++ {
@@ -153,37 +165,41 @@ func BenchmarkStringIndex(b *testing.B) {
 //	}
 //}
 
-//func BenchmarkGetTraceIdWrongByByte(b *testing.B) {
-//	b.ResetTimer()
-//	b.ReportAllocs()
-//	for n := 0; n < b.N; n++ {
-//		GetTraceIdWrongByByte(s)
-//	}
-//}
-
-func BenchmarkGroupString(b *testing.B) {
+func BenchmarkGetTraceIdWrongByByte(b *testing.B) {
 	b.ResetTimer()
 	b.ReportAllocs()
 	for n := 0; n < b.N; n++ {
-		GetTraceIdByString(s)
-		IfSpanWrongString(s)
+		GetTraceIdWrongByByte(s1)
+	}
+}
+
+func BenchmarkGroupString(b *testing.B) {
+	r := s1
+	b.ResetTimer()
+	b.ReportAllocs()
+	for n := 0; n < b.N; n++ {
+		GetTraceIdByString(r)
+		IfSpanWrongString(r)
 	}
 }
 
 //func BenchmarkGroupByte(b *testing.B) {
+//	r := s1
 //	b.ResetTimer()
 //	b.ReportAllocs()
 //	for n := 0; n < b.N; n++ {
-//		GetTraceIdByByte(s)
-//		IfSpanWrongByte(s)
+//		GetTraceIdByByte(r)
+//		//IfSpanWrongByte(r)
 //	}
 //}
 
+//
 //func BenchmarkREGroupByte(b *testing.B) {
+//	r := s1
 //	b.ResetTimer()
 //	b.ReportAllocs()
 //	for n := 0; n < b.N; n++ {
-//		GetTraceIdByByte(s)
-//		ReSpanWrongString(s)
+//		GetTraceIdByString(r)
+//		//IfSpanWrongString(r)
 //	}
 //}

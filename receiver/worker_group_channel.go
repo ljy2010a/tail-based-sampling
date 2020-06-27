@@ -25,8 +25,9 @@ type ChannelGroupConsume struct {
 	blockLen     int
 	lineBlock    []byte
 	scannerBlock []byte
-	posSlice     chan []int
-	readChan     chan PP
+	//lines        []int
+	posSlice chan []int
+	readChan chan PP
 }
 
 func NewChannelGroupConsume(receiver *Receiver, readDone func(), over func()) *ChannelGroupConsume {
@@ -37,18 +38,19 @@ func NewChannelGroupConsume(receiver *Receiver, readDone func(), over func()) *C
 	c := &ChannelGroupConsume{
 		receiver:     receiver,
 		logger:       receiver.logger,
-		lineChan:     make(chan []int, 80),
+		lineChan:     make(chan []int, 110),
 		lineGroupNum: 250000,
+		//lines:        make([]int, 2600_0000),
 		readBufSize:  readBufSize,
 		workNum:      2,
 		readDoneFunc: readDone,
 		overFunc:     over,
 		blockLen:     blockLen,
 		lineBlock:    make([]byte, blockLen),
-		posSlice:     make(chan []int, 100),
-		readChan:     make(chan PP, 2048),
+		posSlice:     make(chan []int, 110),
+		readChan:     make(chan PP, 1024),
 	}
-	for i := 0; i < 100; i++ {
+	for i := 0; i < 110; i++ {
 		c.posSlice <- make([]int, c.lineGroupNum)
 	}
 	return c
@@ -68,8 +70,6 @@ func (c *ChannelGroupConsume) Read(dataUrl string) {
 	btime := time.Now()
 	size := 0
 	total := 0
-	maxLine := 0
-	minLine := 500
 	//i := 0
 	//iLimit := c.lineGroupNum - 1
 	//var lines []int
@@ -127,7 +127,6 @@ func (c *ChannelGroupConsume) Read(dataUrl string) {
 		go func() {
 			for hi := range downTaskChan {
 				if !hbs[hi].exitRead {
-					//logger.Info("rush", zap.Int("seq", hbs[hi].Seq))
 					hbs[hi].wg.Add(1)
 					hbs[hi].asyncfill()
 				}
@@ -200,8 +199,8 @@ func (c *ChannelGroupConsume) Read(dataUrl string) {
 		zap.Duration("total cost", time.Since(btime)),
 		zap.Int("lineChan count", clen),
 		zap.Int("readChan count", ilen),
-		zap.Int("maxLine", maxLine),
-		zap.Int("minLine", minLine),
+		//zap.Int("maxLine", maxLine),
+		//zap.Int("minLine", minLine),
 		zap.Int("total", total),
 		zap.Int("sourceSize", size),
 	)
@@ -241,6 +240,8 @@ func (c *ChannelGroupConsume) Index() {
 	btime := time.Now()
 	once := sync.Once{}
 	total := 0
+	maxLine := 0
+	minLine := 500
 	for val := range c.readChan {
 		once.Do(func() {
 			btime = time.Now()
@@ -271,24 +272,40 @@ func (c *ChannelGroupConsume) Index() {
 		writePos = writeMaxPos
 
 		for {
+			//s := 128
+			//if readPos+s > writePos {
+			//	s = 0
+			//}
 			if p := bytes.IndexByte(c.lineBlock[readPos:writePos], '\n'); p >= 0 {
 				//logger.Info("readPos",
 				//	zap.Int("readPos", readPos),
 				//	zap.Int("blen", blen),
 				//)
 				//l := readPos<<16 | p + 1
+				//p = p + s
+				//c.lines[total] = readPos<<16 | p + 1
 				lines[i] = readPos<<16 | p + 1
 				//lines = append(lines, l)
 
+				//if p > maxLine {
+				//	maxLine = p
+				//}
+				//
+				//if p < minLine {
+				//	minLine = p
+				//}
+
 				readPos += p + 1
-				total++
+				//total++
+				//if total%c.lineGroupNum == 0 {
+				//	c.lineChan <- c.lines[total-c.lineGroupNum : total]
+				//}
 				if i == iLimit {
 					//c.receiver.ConsumeByte(lines)
 					c.lineChan <- lines
 					select {
 					case lines = <-c.posSlice:
 					default:
-						//lines = lines[:0]
 						lines = make([]int, c.lineGroupNum)
 						c.logger.Info("need to make lines")
 					}
@@ -304,6 +321,10 @@ func (c *ChannelGroupConsume) Index() {
 
 	}
 
+	//if total%c.lineGroupNum != 0 {
+	//	c.lineChan <- c.lines[total-total%c.lineGroupNum : total]
+	//}
+
 	if i != 0 {
 		c.lineChan <- lines[:i]
 	}
@@ -312,6 +333,8 @@ func (c *ChannelGroupConsume) Index() {
 	c.logger.Info("index done",
 		zap.Duration("total cost", time.Since(btime)),
 		zap.Int("lineChan less", len(c.lineChan)),
+		zap.Int("maxLine", maxLine),
+		zap.Int("minLine", minLine),
 		zap.Int("total", total),
 	)
 }
@@ -342,10 +365,21 @@ func (c *ChannelGroupConsume) consume() {
 	//skipChan := make([]string, 0, 5000)
 	//lastChan := make([]string, 0, 5000)
 	//tmplastChan := make([]string, 0, 5000)
+	//var tdSlicePos int64
+	//tdSlice := make([]*TData, c.receiver.tdSliceLimit)
+	//for i := int64(0); i < c.receiver.tdSliceLimit; i++ {
+	//	tdSlice[i] = NewTData()
+	//}
 	for lines := range c.lineChan {
 		once.Do(func() {
 			btime = time.Now()
 		})
+		//var idToSpans map[string]*TData
+		//select {
+		//case idToSpans = <-c.receiver.idPool:
+		//default:
+		//	idToSpans = make(map[string]*TData, 10000)
+		//}
 		c.receiver.ConsumeByte(lines)
 		//c.receiver.ConsumeByte(lines, idToSpans)
 		//for k := range idToSpans {
