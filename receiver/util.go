@@ -1,10 +1,12 @@
 package receiver
 
 import (
+	"bytes"
 	"fmt"
 	"github.com/ljy2010a/tailf-based-sampling/common"
 	"github.com/valyala/fasthttp"
 	"go.uber.org/zap"
+	"strings"
 	"sync"
 	"time"
 )
@@ -38,7 +40,7 @@ func (r *Receiver) SendWrongRequest(id string, td *TData, over string) {
 	for i, val := range td.Sbi {
 		start := val >> 16
 		llen := val & 0xffff
-		rtd.Sb[i] = r.consumer.lineBlock[start : start+llen]
+		rtd.Sb[i] = linesBuf[start : start+llen]
 	}
 
 	//var rtd *common.TraceData
@@ -55,7 +57,7 @@ func (r *Receiver) SendWrongRequest(id string, td *TData, over string) {
 	//for _, val := range td.Sbi {
 	//	start := val >> 16
 	//	llen := val & 0xffff
-	//	rtd.Sb = append(rtd.Sb, r.consumer.lineBlock[start:start+llen])
+	//	rtd.Sb = append(rtd.Sb, r.consumer.linesBuf[start:start+llen])
 	//}
 
 	b, _ := rtd.Marshal()
@@ -95,13 +97,13 @@ func (r *Receiver) notifyFIN() {
 	defer fasthttp.ReleaseResponse(resp)
 
 	if err := c.Do(req, resp); err != nil {
-		r.logger.Info("send notify fin",
+		logger.Info("send notify fin",
 			zap.Error(err),
 		)
 		return
 	}
 	if resp.StatusCode() != fasthttp.StatusOK {
-		r.logger.Info("send notify fin",
+		logger.Info("send notify fin",
 			zap.Int("code", resp.StatusCode()),
 		)
 		return
@@ -123,13 +125,13 @@ func (r *Receiver) warmUp(wg sync.WaitGroup) {
 	defer fasthttp.ReleaseResponse(resp)
 
 	if err := c.Do(req, resp); err != nil {
-		r.logger.Info("send warm up",
+		logger.Info("send warm up",
 			zap.Error(err),
 		)
 		return
 	}
 	if resp.StatusCode() != fasthttp.StatusOK {
-		r.logger.Info("send notify fin",
+		logger.Info("send notify fin",
 			zap.Int("code", resp.StatusCode()),
 		)
 		return
@@ -141,12 +143,6 @@ type TData struct {
 	Status uint8
 	Sbi    []int
 	//sync.Mutex
-}
-
-func NewTData() *TData {
-	return &TData{
-		Sbi: make([]int, 0, 100),
-	}
 }
 
 //func (m *TData) AddSpani(newSpans []int) {
@@ -203,13 +199,15 @@ type TDataMap struct {
 
 func (t *TDataMap) Load(id string) (*TData, bool) {
 	//shard := t.shards[uint(fnv32(id))&shardNum1]
-	shard := t.shards[uint(fnv32(id))%uint(shardNum)]
+	//shard := t.shards[uint(fnv32(id))%uint(shardNum)]
+	shard := t.shards[uint(id[0])&shardNum1]
 	return shard.Load(id)
 }
 
 func (t *TDataMap) LoadOrStore(id string, val *TData) (*TData, bool) {
 	//shard := t.shards[uint(fnv32(id))&shardNum1]
-	shard := t.shards[uint(fnv32(id))%uint(shardNum)]
+	//shard := t.shards[uint(fnv32(id))%uint(shardNum)]
+	shard := t.shards[uint(id[0])&shardNum1]
 	return shard.LoadOrStore(id, val)
 }
 
@@ -242,4 +240,280 @@ func fnv64(key string) uint {
 		hash *= prime64
 	}
 	return hash
+}
+
+var (
+	FCode    = []byte("http.status_code=")
+	FCode200 = []byte("http.status_code=200")
+	Ferr1    = []byte("error=1")
+)
+
+func GetTraceIdWrongByByte(l []byte) (string, bool) {
+	//firstIdx := bytes.IndexByte(l, '|')
+	//id := common.BytesToString(l[:firstIdx])
+	//if bytes.Contains(l, Ferr1) {
+	//	return id, true
+	//}
+	//if bytes.Contains(l, FCode) && !bytes.Contains(l, FCode200) {
+	//	return id, true
+	//}
+	//return id, false
+	ls := common.BytesToString(l)
+	tpos := strings.IndexByte(ls, '|')
+	id := ls[:tpos]
+
+	//if bytes.Contains(ll, Ferr1) {
+	//	return id, true
+	//}
+	//if bytes.Contains(ll, FCode) && !bytes.Contains(ll, FCode200) {
+	//	return id, true
+	//}
+	//return id, false
+
+	//pos := bytes.readIndex(ll, FCode)
+	//if pos == -1 {
+	//	return id, bytes.Contains(ll, Ferr1)
+	//}
+	//if ll[pos+17] != '2' {
+	//	return id, true
+	//}
+	//if ll[pos+18] != '0' {
+	//	return id, true
+	//}
+	//if ll[pos+19] != '0' {
+	//	return id, true
+	//}
+	//return id, bytes.Contains(ll, Ferr1)
+
+	tagPos := tpos + 1
+	httpHit := false
+	for {
+		p := bytes.IndexByte(l[tagPos:], '&')
+		if p == -1 {
+			//http.status_code=200
+			//error=1
+			llen := len(l)
+			if (tagPos+7) < llen &&
+				l[tagPos+0] == 'e' &&
+				l[tagPos+1] == 'r' &&
+				l[tagPos+2] == 'r' &&
+				l[tagPos+3] == 'o' &&
+				l[tagPos+4] == 'r' &&
+				l[tagPos+5] == '=' &&
+				l[tagPos+6] == '1' {
+				return id, true
+			}
+			//fmt.Println(string(l[tagPos:]))
+			//if bytes.Equal(l[tagPos:], Ferr1) {
+			//	return id, true
+			//}
+			// http.status_code=
+			if tagPos+17 < llen &&
+				l[tagPos+0] == 'h' &&
+				l[tagPos+1] == 't' &&
+				l[tagPos+2] == 't' &&
+				l[tagPos+3] == 'p' &&
+				l[tagPos+4] == '.' &&
+				l[tagPos+5] == 's' &&
+				l[tagPos+6] == 't' &&
+				l[tagPos+7] == 'a' &&
+				l[tagPos+8] == 't' &&
+				l[tagPos+9] == 'u' &&
+				l[tagPos+10] == 's' &&
+				l[tagPos+11] == '_' &&
+				l[tagPos+12] == 'c' &&
+				l[tagPos+13] == 'o' &&
+				l[tagPos+14] == 'd' &&
+				l[tagPos+15] == 'e' &&
+				l[tagPos+16] == '=' && !httpHit {
+				httpHit = true
+				if tagPos+19 < llen && (l[tagPos+17] != '2' || l[tagPos+18] != '0' || l[tagPos+19] != '0') {
+					return id, true
+				}
+			}
+			return id, false
+		} else {
+			tagPos += p + 1
+			//error=1
+			//fmt.Println(string(l[tagPos-8:]))
+			if l[tagPos-8] == 'e' &&
+				l[tagPos-7] == 'r' &&
+				l[tagPos-6] == 'r' &&
+				l[tagPos-5] == 'o' &&
+				l[tagPos-4] == 'r' &&
+				l[tagPos-3] == '=' &&
+				l[tagPos-2] == '1' {
+				return id, true
+			}
+			//if bytes.Equal(l[tagPos-8:tagPos-1], Ferr1) {
+			//	return id, true
+			//}
+
+			// http.status_code=
+			//fmt.Println(string(l[tagPos-21:tagPos-4]), string(l[tagPos-21]), string(l[tagPos-4]), string(l[tagPos-3]), string(l[tagPos-2]))
+			if l[tagPos-21] == 'h' &&
+				l[tagPos-20] == 't' &&
+				l[tagPos-19] == 't' &&
+				l[tagPos-18] == 'p' &&
+				l[tagPos-17] == '.' &&
+				l[tagPos-16] == 's' &&
+				l[tagPos-15] == 't' &&
+				l[tagPos-14] == 'a' &&
+				l[tagPos-13] == 't' &&
+				l[tagPos-12] == 'u' &&
+				l[tagPos-11] == 's' &&
+				l[tagPos-10] == '_' &&
+				l[tagPos-9] == 'c' &&
+				l[tagPos-8] == 'o' &&
+				l[tagPos-7] == 'd' &&
+				l[tagPos-6] == 'e' &&
+				l[tagPos-5] == '=' && !httpHit {
+				if l[tagPos-4] == '2' &&
+					l[tagPos-3] == '0' &&
+					l[tagPos-2] == '0' {
+					return id, false
+				}
+				if l[tagPos-4] != '2' ||
+					l[tagPos-3] != '0' ||
+					l[tagPos-2] != '0' {
+					return id, true
+				}
+				httpHit = true
+			}
+			//fmt.Println(string(l[tagPos-21:tagPos-4]), string(l[tagPos-4]), string(l[tagPos-3]), string(l[tagPos-2]))
+			//if bytes.Equal(l[tagPos-21:tagPos-4], FCode) && !httpHit {
+			//	httpHit = true
+			//	if l[tagPos-4] != '2' && l[tagPos-3] != '0' && l[tagPos-2] != '0' {
+			//		return id, true
+			//	}
+			//}
+		}
+	}
+
+}
+
+func GetTraceIdByString(line []byte) string {
+	l := common.BytesToString(line)
+	return l[:strings.IndexByte(l, '|')]
+}
+
+func IfSpanWrongString(l []byte) bool {
+	//l := common.BytesToString(line)
+	//pos := strings.readIndex(l, "http.status_code=")
+	//if pos == -1 {
+	//	if strings.Contains(l, "error=1") {
+	//		return true
+	//	}
+	//	return false
+	//}
+	//if l[pos+17] != '2' {
+	//	return true
+	//}
+	//if l[pos+18] != '0' {
+	//	return true
+	//}
+	//if l[pos+19] != '0' {
+	//	return true
+	//}
+	//return strings.Contains(l, "error=1")
+
+	tagPos := 32
+	httpHit := false
+	//bytes.IndexByte(l[64:], '&')
+	//bytes.IndexByte(l[165:], '&')
+	//tagPos = 192
+	for {
+		p := bytes.IndexByte(l[tagPos:], '&')
+		if p == -1 {
+			//error=1
+			llen := len(l)
+			if (tagPos+7) < llen &&
+				l[tagPos+0] == 'e' &&
+				l[tagPos+1] == 'r' &&
+				l[tagPos+2] == 'r' &&
+				l[tagPos+3] == 'o' &&
+				l[tagPos+4] == 'r' &&
+				l[tagPos+5] == '=' &&
+				l[tagPos+6] == '1' {
+				return true
+			}
+			// http.status_code=
+			if tagPos+17 < llen &&
+				l[tagPos+0] == 'h' &&
+				l[tagPos+1] == 't' &&
+				l[tagPos+2] == 't' &&
+				l[tagPos+3] == 'p' &&
+				l[tagPos+4] == '.' &&
+				l[tagPos+5] == 's' &&
+				l[tagPos+6] == 't' &&
+				l[tagPos+7] == 'a' &&
+				l[tagPos+8] == 't' &&
+				l[tagPos+9] == 'u' &&
+				l[tagPos+10] == 's' &&
+				l[tagPos+11] == '_' &&
+				l[tagPos+12] == 'c' &&
+				l[tagPos+13] == 'o' &&
+				l[tagPos+14] == 'd' &&
+				l[tagPos+15] == 'e' &&
+				l[tagPos+16] == '=' && !httpHit {
+				httpHit = true
+				if tagPos+19 < llen && (l[tagPos+17] != '2' || l[tagPos+18] != '0' || l[tagPos+19] != '0') {
+					return true
+				}
+			}
+			return false
+		} else {
+			//if tagPos != 64 && p != 20 && p != 7 {
+			//	//fmt.Println("s",tagPos,p)
+			//	tagPos += p + 1
+			//	continue
+			//}
+			//fmt.Println(tagPos,p)
+			tagPos += p + 1
+			// http.status_code=
+			//fmt.Println(string(l[tagPos-21:tagPos-4]), string(l[tagPos-21]), string(l[tagPos-4]), string(l[tagPos-3]), string(l[tagPos-2]))
+			if l[tagPos-21] == 'h' &&
+				//l[tagPos-20] == 't' &&
+				//l[tagPos-19] == 't' &&
+				//l[tagPos-18] == 'p' &&
+				//l[tagPos-17] == '.' &&
+				//l[tagPos-16] == 's' &&
+				l[tagPos-15] == 't' &&
+				//l[tagPos-14] == 'a' &&
+				//l[tagPos-13] == 't' &&
+				//l[tagPos-12] == 'u' &&
+				//l[tagPos-11] == 's' &&
+				//l[tagPos-10] == '_' &&
+				//l[tagPos-9] == 'c' &&
+				l[tagPos-8] == 'o' &&
+				//l[tagPos-7] == 'd' &&
+				//l[tagPos-6] == 'e' &&
+				l[tagPos-5] == '=' &&
+				!httpHit {
+				if l[tagPos-4] == '2' &&
+					l[tagPos-3] == '0' &&
+					l[tagPos-2] == '0' {
+					return false
+				}
+				if l[tagPos-4] != '2' ||
+					l[tagPos-3] != '0' ||
+					l[tagPos-2] != '0' {
+					return true
+				}
+				httpHit = true
+			}
+
+			//error=1
+			//fmt.Println(string(l[tagPos-8:]))
+			if l[tagPos-8] == 'e' &&
+				l[tagPos-7] == 'r' &&
+				l[tagPos-6] == 'r' &&
+				l[tagPos-5] == 'o' &&
+				l[tagPos-4] == 'r' &&
+				l[tagPos-3] == '=' &&
+				l[tagPos-2] == '1' {
+				return true
+			}
+		}
+	}
 }

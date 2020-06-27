@@ -18,11 +18,10 @@ import (
 )
 
 type Compactor struct {
-	HttpPort   string // 8003
-	DataPort   string // 8081
-	ReportUrl  string
-	AutoDetect bool
-	logger     *zap.Logger
+	HttpPort  string // 8003
+	DataPort  string // 8081
+	ReportUrl string
+	logger    *zap.Logger
 
 	finishChan  chan interface{}
 	checkSumMap map[string]string
@@ -59,38 +58,6 @@ func (r *Compactor) Run() {
 				zap.Int("i", i),
 			)
 			time.Sleep(1 * time.Minute)
-		}
-	}()
-	go func() {
-		if !r.AutoDetect {
-			return
-		}
-		time.Sleep(5 * time.Second)
-		if r.DataPort != "" {
-			r.logger.Info("has dataport")
-			return
-		}
-		r.logger.Info("try to detect")
-
-		port := 8000
-		for i := 0; i < 2000; i++ {
-			port++
-			dataUrl := fmt.Sprintf("http://127.0.0.1:%d/trace1.data", port)
-			resp, err := http.Get(dataUrl)
-			if err != nil {
-				continue
-			}
-			resp.Body.Close()
-			r.logger.Info("detect port",
-				zap.Int("port", port),
-				zap.Int("code", resp.StatusCode),
-			)
-			if resp.StatusCode == 200 {
-				r.DataPort = fmt.Sprintf("%d", port)
-				r.ReportUrl = fmt.Sprintf("http://127.0.0.1:%s/api/finished", r.DataPort)
-				r.startTime = time.Now()
-				return
-			}
 		}
 	}()
 
@@ -160,7 +127,7 @@ func (r *Compactor) SetWrongHandler(ctx *fasthttp.RequestCtx) {
 		reportUrl := fmt.Sprintf("http://127.0.0.1:%s/qw?id=%s&over=%s", anotherPort, td.Id, over)
 		r.doneWg.Add(1)
 		//if over == "1" {
-		//	NotifyAnotherWrong(reportUrl, r.doneWg)
+		//	NotifyAnotherWrong(reportUrl, &r.doneWg)
 		//} else {
 		go NotifyAnotherWrong(reportUrl, &r.doneWg)
 		//}
@@ -180,8 +147,8 @@ func (r *Compactor) SetWrongHandler(ctx *fasthttp.RequestCtx) {
 		//if over == "1" {
 		//	otd.Md5 = CompactMd5(otd)
 		//} else {
+		r.doneWg.Add(1)
 		go func() {
-			r.doneWg.Add(1)
 			otd.AddSpan(td.Sb)
 			otd.Md5 = CompactMd5(otd, &r.doneWg)
 		}()
