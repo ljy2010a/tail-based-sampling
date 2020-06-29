@@ -35,9 +35,10 @@ func (r *Receiver) SendWrongRequest(id string, td *TData, over string) {
 	rtd := &common.TraceData{
 		Id:     id,
 		Source: r.HttpPort,
-		Sb:     make([][]byte, len(td.Sbi)),
+		Sb:     make([][]byte, td.n),
 	}
-	for i, val := range td.Sbi {
+	for i := uint8(0); i < td.n; i++ {
+		val := td.Sbi[i]
 		start := val >> 16
 		llen := val & 0xffff
 		rtd.Sb[i] = linesBuf[start : start+llen]
@@ -141,6 +142,7 @@ func (r *Receiver) warmUp(wg sync.WaitGroup) {
 type TData struct {
 	Wrong  bool
 	Status uint8
+	n      uint8
 	Sbi    []int
 	//sync.Mutex
 }
@@ -198,16 +200,16 @@ type TDataMap struct {
 }
 
 func (t *TDataMap) Load(id string) (*TData, bool) {
-	//shard := t.shards[uint(fnv32(id))&shardNum1]
+	shard := t.shards[uint(fnv32(id))&shardNum1]
 	//shard := t.shards[uint(fnv32(id))%uint(shardNum)]
-	shard := t.shards[uint(id[0])&shardNum1]
+	//shard := t.shards[uint(id[0])&shardNum1]
 	return shard.Load(id)
 }
 
 func (t *TDataMap) LoadOrStore(id string, val *TData) (*TData, bool) {
-	//shard := t.shards[uint(fnv32(id))&shardNum1]
+	shard := t.shards[uint(fnv32(id))&shardNum1]
 	//shard := t.shards[uint(fnv32(id))%uint(shardNum)]
-	shard := t.shards[uint(id[0])&shardNum1]
+	//shard := t.shards[uint(id[0])&shardNum1]
 	return shard.LoadOrStore(id, val)
 }
 
@@ -218,7 +220,7 @@ const offset = uint32(2166136261)
 // FNV hash
 func fnv32(key string) uint32 {
 	hash := uint32(2166136261)
-	for i := 0; i < len(key); i++ {
+	for i := 0; i < 5; i++ {
 		hash *= prime32
 		hash ^= uint32(key[i])
 	}

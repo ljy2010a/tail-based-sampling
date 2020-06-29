@@ -126,11 +126,11 @@ func (r *Compactor) SetWrongHandler(ctx *fasthttp.RequestCtx) {
 		}
 		reportUrl := fmt.Sprintf("http://127.0.0.1:%s/qw?id=%s&over=%s", anotherPort, td.Id, over)
 		r.doneWg.Add(1)
-		//if over == "1" {
-		//	NotifyAnotherWrong(reportUrl, &r.doneWg)
-		//} else {
-		go NotifyAnotherWrong(reportUrl, &r.doneWg)
-		//}
+		if over == "1" {
+			NotifyAnotherWrong(reportUrl, &r.doneWg)
+		} else {
+			go NotifyAnotherWrong(reportUrl, &r.doneWg)
+		}
 	} else {
 		otd := tdi.(*common.TraceData)
 		if otd.Md5 != "" {
@@ -147,11 +147,11 @@ func (r *Compactor) SetWrongHandler(ctx *fasthttp.RequestCtx) {
 		//if over == "1" {
 		//	otd.Md5 = CompactMd5(otd)
 		//} else {
-		r.doneWg.Add(1)
-		go func() {
-			otd.AddSpan(td.Sb)
-			otd.Md5 = CompactMd5(otd, &r.doneWg)
-		}()
+		//r.doneWg.Add(1)
+		//go func() {
+		otd.AddSpan(td.Sb)
+		otd.Md5 = CompactMd5(otd, nil)
+		//}()
 		//}
 	}
 	ctx.SetStatusCode(http.StatusOK)

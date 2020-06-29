@@ -52,7 +52,7 @@ type Receiver struct {
 
 func NewTData() *TData {
 	return &TData{
-		Sbi: make([]int, 0, 100),
+		Sbi: make([]int, 110),
 	}
 }
 
@@ -68,7 +68,11 @@ const (
 
 	tdCacheLimit = 85_0000
 
-	workNum = 2
+	workNum = 3
+
+	extDownloader = 1
+
+	downloadStepSize = 512 * 1024 * 1024
 )
 
 var (
@@ -177,22 +181,27 @@ func (r *Receiver) ConsumeByte(lines []int) {
 			} else {
 				td = NewTData()
 			}
+			idToSpans[id] = td
 			td.Wrong = IfSpanWrongString(line)
 			if i > 2_0000 && i < linesBatchNum-2_0000 {
 				td.Status = common.TraceStatusSkip
 			}
-			td.Sbi = append(td.Sbi, val)
+			td.Sbi[0] = val
+			td.n++
+			//td.Sbi = append(td.Sbi, val)
 			//idToSpans[id] = nowPos
-			idToSpans[id] = td
 		} else {
 			//etd := r.tdCache[etdp]
 			if !etd.Wrong && IfSpanWrongString(line) {
 				etd.Wrong = true
 			}
-			etd.Sbi = append(etd.Sbi, val)
+			//etd.Sbi = append(etd.Sbi, val)
+			etd.Sbi[etd.n] = val
+			etd.n++
 		}
 	}
 
+	//return
 	//mapSize := len(idToSpans)
 	//if mapSize > r.mapMaxSize {
 	//	r.mapMaxSize = mapSize
@@ -209,7 +218,9 @@ func (r *Receiver) ConsumeByte(lines []int) {
 		if exist {
 			// 已存在
 			//r.traceMiss++
-			td.Sbi = append(td.Sbi, etd.Sbi...)
+			//td.Sbi = append(td.Sbi, etd.Sbi...)
+			copy(td.Sbi[td.n:], etd.Sbi[:etd.n])
+			td.n += etd.n
 			if !td.Wrong && etd.Wrong {
 				td.Wrong = true
 			}
@@ -308,5 +319,10 @@ func (r *Receiver) finish() {
 		zap.Int("traceSkip", r.traceSkip),
 		zap.Int("wrongHit", r.wrongHit),
 	)
+	//for i := range r.idToTrace.shards {
+	//	logger.Info("shard",
+	//		zap.Int("i", len(r.idToTrace.shards[i].tdMap)),
+	//	)
+	//}
 	r.notifyFIN()
 }

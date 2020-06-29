@@ -8,48 +8,6 @@ import (
 	"time"
 )
 
-//type ChannelGroupConsume struct {
-//	receiver     *Receiver
-//	linesQueue     chan []int
-//	linesBatchNum int
-//	readBufSize  int
-//	readDoneFunc func()
-//	overFunc     func()
-//	doneWg       sync.WaitGroup
-//	workNum      int
-//	linesBufLen     int
-//	linesBuf    []byte
-//	scannerBlock []byte
-//	//lines        []int
-//	linesCache chan []int
-//	readChan chan PP
-//}
-
-//func NewChannelGroupConsume(receiver *Receiver, readDone func(), over func()) *ChannelGroupConsume {
-//	// 500w = 1450MB
-//	// 1w = 2.6MB
-//	linesBufLen := int(2.5 * 1024 * 1024 * 1024)
-//	readBufSize := 128 * 1024 * 1024
-//	c := &ChannelGroupConsume{
-//		receiver:     receiver,
-//		linesQueue:     make(chan []int, 110),
-//		linesBatchNum: 250000,
-//		//lines:        make([]int, 2600_0000),
-//		readBufSize:  readBufSize,
-//		workNum:      2,
-//		readDoneFunc: readDone,
-//		overFunc:     over,
-//		linesBufLen:     linesBufLen,
-//		linesBuf:    make([]byte, linesBufLen),
-//		linesCache:     make(chan []int, 110),
-//		readChan:     make(chan PP, 1024),
-//	}
-//	for i := 0; i < 110; i++ {
-//		c.linesCache <- make([]int, c.linesBatchNum)
-//	}
-//	return c
-//}
-
 func (r *Receiver) Read(dataUrl string) {
 	//runtime.LockOSThread()
 	//defer runtime.UnlockOSThread()
@@ -117,7 +75,7 @@ func (r *Receiver) Read(dataUrl string) {
 		downTaskChan <- hi
 	}
 
-	for i := 0; i < 1; i++ {
+	for i := 0; i < extDownloader; i++ {
 		go func() {
 			for hi := range downTaskChan {
 				if !hbs[hi].exitRead {
@@ -253,8 +211,8 @@ func (r *Receiver) readIndex() {
 				logger.Info("before has less",
 					zap.Int("less", less),
 				)
-				copy(linesBuf[20*1024*1024-less:20*1024*1024], linesBuf[readPos:writePos])
-				readPos = 20*1024*1024 - less
+				copy(linesBuf[4096-less:4096], linesBuf[readPos:writePos])
+				readPos = 4096 - less
 				writeMaxPos = start + blen
 			}
 		}
@@ -266,9 +224,9 @@ func (r *Receiver) readIndex() {
 		writePos = writeMaxPos
 
 		for {
-			//s := 128
-			//if readPos+s > writePos {
-			//	s = 0
+			//e := readPos + 512
+			//if e >= writePos {
+			//	e = writePos
 			//}
 			if p := bytes.IndexByte(linesBuf[readPos:writePos], '\n'); p >= 0 {
 				//logger.Info("readPos",

@@ -58,7 +58,7 @@ func GenRange(dataUrl string, bufSize int) []*HttpBlock {
 		zap.Int("len", length),
 	)
 
-	stepSize := 512 * 1024 * 1024
+	stepSize := downloadStepSize
 	hbs := make([]*HttpBlock, 0, length/stepSize+1)
 	bufStart := 0
 	bufEnd := 0
@@ -72,7 +72,7 @@ func GenRange(dataUrl string, bufSize int) []*HttpBlock {
 
 		tmpStepSize := stepSize
 		if bufEnd == bufSize {
-			bufStart = 20 * 1024 * 1024
+			bufStart = 4096
 			bufEnd = bufStart + tmpStepSize
 		} else {
 			if bufStart+tmpStepSize > bufSize {

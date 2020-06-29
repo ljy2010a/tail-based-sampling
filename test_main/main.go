@@ -4,6 +4,8 @@ import (
 	"fmt"
 	"github.com/ljy2010a/tailf-based-sampling/compactor"
 	"github.com/ljy2010a/tailf-based-sampling/receiver"
+	"net/http"
+	_ "net/http/pprof"
 	"runtime"
 	"time"
 )
@@ -16,6 +18,10 @@ func main() {
 		runtime.GOMAXPROCS(-1),
 	)
 	runtime.GOMAXPROCS(2)
+	go func() {
+		http.ListenAndServe("0.0.0.0:6060", nil)
+
+	}()
 	rr := receiver.Receiver{
 		HttpPort:             "8000",
 		DataPort:             "8081",
