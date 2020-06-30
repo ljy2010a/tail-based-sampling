@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"fmt"
 	"go.uber.org/zap"
+	"io"
 	"sync"
 	"time"
 )
@@ -101,7 +102,14 @@ func (r *Receiver) Read(dataUrl string) {
 			r.readChan <- PP{start: hb.r, llen: hb.w - hb.r}
 		}
 		for {
-			n, err := hb.rd.Read(linesBuf[hb.w:])
+			//n, err := hb.rd.Read(linesBuf[hb.w:])
+			var n int
+			var err error
+			if hb.w+hb.readBufSize <= hb.BufEnd {
+				n, err = io.ReadAtLeast(hb.rd, hb.buf[hb.w:], hb.readBufSize)
+			} else {
+				n, err = hb.rd.Read(hb.buf[hb.w:])
+			}
 			if n > 0 {
 				//size += n
 				//total++

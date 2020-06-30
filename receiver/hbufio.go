@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"go.uber.org/zap"
 	"io"
+	"runtime"
 	"time"
 )
 
@@ -43,8 +44,13 @@ func (b *HttpBlock) asyncfill() {
 			return
 		default:
 			//logger.Info("async read")
-			//n, err := io.ReadAtLeast(b.rd, b.buf[b.w:], 16*1024*1024)
-			n, err := b.rd.Read(b.buf[b.w:])
+			var n int
+			var err error
+			if b.w+b.readBufSize <= b.BufEnd {
+				n, err = io.ReadAtLeast(b.rd, b.buf[b.w:], b.readBufSize)
+			} else {
+				n, err = b.rd.Read(b.buf[b.w:])
+			}
 			b.w += n
 			if err != nil {
 				b.err = err
@@ -58,7 +64,7 @@ func (b *HttpBlock) asyncfill() {
 			}
 			if n > 0 {
 				//logger.Info("read ", zap.Int("b.w", b.w))
-				//runtime.Gosched()
+				runtime.Gosched()
 				continue
 			}
 		}

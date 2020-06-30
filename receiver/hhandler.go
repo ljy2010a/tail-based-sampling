@@ -39,11 +39,22 @@ func (r *Receiver) RunHttpServer() {
 
 func (r *Receiver) SetParamHandler(ctx *fasthttp.RequestCtx) {
 	port := string(ctx.QueryArgs().Peek("port"))
+
+	if r.DataPort != "" {
+		logger.Info("SetParamHandler already has",
+			zap.String("port", r.HttpPort),
+			zap.String("set", r.DataPort),
+		)
+		ctx.SetStatusCode(http.StatusOK)
+		return
+	}
+
 	r.DataPort = port
 	logger.Info("SetParamHandler",
 		zap.String("port", r.HttpPort),
 		zap.String("set", r.DataPort),
 	)
+	go r.notifyDataPort()
 
 	if r.HttpPort == "8000" {
 		dataUrl := fmt.Sprintf("http://127.0.0.1:%s/trace1.data", r.DataPort)
@@ -56,6 +67,32 @@ func (r *Receiver) SetParamHandler(ctx *fasthttp.RequestCtx) {
 	}
 	ctx.SetStatusCode(http.StatusOK)
 	return
+}
+
+func (r *Receiver) notifyDataPort() {
+	notifyUrl := fmt.Sprintf("http://127.0.0.1:%s/setParameter?port=%s&hport=%s", r.CompactorPort, r.DataPort, r.HttpPort)
+
+	req := fasthttp.AcquireRequest()
+	defer fasthttp.ReleaseRequest(req)
+
+	req.SetRequestURI(notifyUrl)
+	req.Header.SetMethod("GET")
+
+	resp := fasthttp.AcquireResponse()
+	defer fasthttp.ReleaseResponse(resp)
+
+	if err := c.Do(req, resp); err != nil {
+		logger.Info("send setParameter to compactor",
+			zap.Error(err),
+		)
+		return
+	}
+	if resp.StatusCode() != fasthttp.StatusOK {
+		logger.Info("send setParameter to compactor",
+			zap.Int("code", resp.StatusCode()),
+		)
+		return
+	}
 }
 
 func (r *Receiver) QueryWrongHandler(ctx *fasthttp.RequestCtx) {

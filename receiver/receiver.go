@@ -70,7 +70,7 @@ const (
 
 	workNum = 3
 
-	extDownloader = 1
+	extDownloader = 2
 
 	downloadStepSize = 512 * 1024 * 1024
 )
@@ -115,17 +115,11 @@ func (r *Receiver) Run() {
 	//		Sb:     make([][]byte, 0, 60),
 	//	}
 	//}
-
-	//r.tdCacheLimit = 85_0000
-	//r.tdCache = make([]*TData, tdCacheLimit)
 	for i := int64(0); i < tdCacheLimit; i++ {
 		tdCache[i] = NewTData()
 	}
 
-	//batchNum := 110
-	//r.linesBatchNum = 250000
-	//r.linesBufLen = int(2.5 * 1024 * 1024 * 1024)
-	r.readBufSize = 128 * 1024 * 1024
+	r.readBufSize = 32 * 1024 * 1024
 
 	r.idMapCache = make(chan map[string]*TData, batchNum)
 	for i := 0; i < batchNum; i++ {
@@ -201,7 +195,6 @@ func (r *Receiver) ConsumeByte(lines []int) {
 		}
 	}
 
-	//return
 	//mapSize := len(idToSpans)
 	//if mapSize > r.mapMaxSize {
 	//	r.mapMaxSize = mapSize

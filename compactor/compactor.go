@@ -95,7 +95,16 @@ func (r *Compactor) Run() {
 
 func (r *Compactor) SetParamHandler(ctx *fasthttp.RequestCtx) {
 	port := string(ctx.QueryArgs().Peek("port"))
+	hport := string(ctx.QueryArgs().Peek("hport"))
 	r.DataPort = port
+
+	if hport != "" {
+		anotherPort := "8000"
+		if hport == "8000" {
+			anotherPort = "8001"
+		}
+		r.notifyDataPort(anotherPort)
+	}
 	r.ReportUrl = fmt.Sprintf("http://127.0.0.1:%s/api/finished", r.DataPort)
 	r.startTime = time.Now()
 	r.logger.Info("SetParamHandler",
@@ -104,6 +113,32 @@ func (r *Compactor) SetParamHandler(ctx *fasthttp.RequestCtx) {
 	)
 	ctx.SetStatusCode(http.StatusOK)
 	return
+}
+
+func (r *Compactor) notifyDataPort(httpPort string) {
+	notifyUrl := fmt.Sprintf("http://127.0.0.1:%s/setParameter?port=%s", httpPort, r.DataPort)
+
+	req := fasthttp.AcquireRequest()
+	defer fasthttp.ReleaseRequest(req)
+
+	req.SetRequestURI(notifyUrl)
+	req.Header.SetMethod("GET")
+
+	resp := fasthttp.AcquireResponse()
+	defer fasthttp.ReleaseResponse(resp)
+
+	if err := c.Do(req, resp); err != nil {
+		r.logger.Info("send setParameter to another",
+			zap.Error(err),
+		)
+		return
+	}
+	if resp.StatusCode() != fasthttp.StatusOK {
+		r.logger.Info("send setParameter to another",
+			zap.Int("code", resp.StatusCode()),
+		)
+		return
+	}
 }
 
 func (r *Compactor) SetWrongHandler(ctx *fasthttp.RequestCtx) {
