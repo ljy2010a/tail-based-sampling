@@ -11,8 +11,9 @@ const INT_PHI = 0x9E3779B9
 const FREE_KEY = 0
 
 func phiMix(x int64) int64 {
-	h := x * INT_PHI
-	return h ^ (h >> 16)
+	return x
+	//h := x * INT_PHI
+	//return h ^ (h >> 16)
 }
 
 // Map is a map-like data-structure for int64s

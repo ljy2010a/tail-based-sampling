@@ -68,7 +68,7 @@ const (
 
 	tdCacheLimit = 85_0000
 
-	workNum = 3
+	workNum = 2
 
 	extDownloader = 2
 
