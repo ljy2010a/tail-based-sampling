@@ -37,7 +37,7 @@ type Receiver struct {
 	//tdSendSlicePos   int64
 	//tdSendSliceLimit int64
 
-	idMapCache chan map[string]*TData
+	idMapCache chan *Map
 
 	linesQueue chan []int
 	//linesBatchNum int
@@ -119,11 +119,11 @@ func (r *Receiver) Run() {
 		tdCache[i] = NewTData()
 	}
 
-	r.readBufSize = 32 * 1024 * 1024
+	r.readBufSize = 64 * 1024 * 1024
 
-	r.idMapCache = make(chan map[string]*TData, batchNum)
+	r.idMapCache = make(chan *Map, batchNum)
 	for i := 0; i < batchNum; i++ {
-		r.idMapCache <- NewIdMapCache()
+		r.idMapCache <- New(10000, 0.99)
 	}
 
 	r.linesQueue = make(chan []int, batchNum)
@@ -152,11 +152,11 @@ func (r *Receiver) Run() {
 
 //func (r *Receiver) ConsumeByte(lines []int, idToSpans2 map[string]*TData, tdCachePos *int64, tdCache []*TData) {
 func (r *Receiver) ConsumeByte(lines []int) {
-	var idToSpans map[string]*TData
+	var idToSpans *Map
 	select {
 	case idToSpans = <-r.idMapCache:
 	default:
-		idToSpans = NewIdMapCache()
+		idToSpans = New(10000, 0.99)
 	}
 	//idToSpans := make(map[string]*TData, 10000)
 	for i, val := range lines {
@@ -167,7 +167,8 @@ func (r *Receiver) ConsumeByte(lines []int) {
 		//IfSpanWrongString(line)
 		//continue
 		id := GetTraceIdByString(line)
-		if etd, ok := idToSpans[id]; !ok {
+		idh := fnvi64(id)
+		if etdp, ok := idToSpans.Get(idh); !ok {
 			var td *TData
 			nowPos := atomic.AddInt64(&r.tdCachePos, 1)
 			if nowPos < tdCacheLimit {
@@ -175,8 +176,9 @@ func (r *Receiver) ConsumeByte(lines []int) {
 			} else {
 				td = NewTData()
 			}
-			idToSpans[id] = td
+			idToSpans.Put(idh, nowPos)
 			td.Wrong = IfSpanWrongString(line)
+			td.id = id
 			if i > 2_0000 && i < linesBatchNum-2_0000 {
 				td.Status = common.TraceStatusSkip
 			}
@@ -185,7 +187,7 @@ func (r *Receiver) ConsumeByte(lines []int) {
 			//td.Sbi = append(td.Sbi, val)
 			//idToSpans[id] = nowPos
 		} else {
-			//etd := r.tdCache[etdp]
+			etd := tdCache[etdp]
 			if !etd.Wrong && IfSpanWrongString(line) {
 				etd.Wrong = true
 			}
@@ -200,8 +202,13 @@ func (r *Receiver) ConsumeByte(lines []int) {
 	//	r.mapMaxSize = mapSize
 	//}
 
-	for id, etd := range idToSpans {
-		//etd := r.tdCache[etdp]
+	for i := 0; i < len(idToSpans.data); i += 2 {
+		if idToSpans.data[i] == FREE_KEY {
+			continue
+		}
+		etdp := idToSpans.data[i+1]
+		etd := tdCache[etdp]
+		id := etd.id
 		if etd.Status == common.TraceStatusSkip && etd.Wrong {
 			//r.traceSkip++
 			r.dropTrace(id, etd, "0")

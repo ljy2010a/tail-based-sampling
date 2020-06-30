@@ -143,6 +143,7 @@ type TData struct {
 	Wrong  bool
 	Status uint8
 	n      uint8
+	id string
 	Sbi    []int
 	//sync.Mutex
 }
@@ -225,6 +226,21 @@ func fnv32(key string) uint32 {
 		hash ^= uint32(key[i])
 	}
 	return hash
+}
+
+func fnvi64(key string) int64 {
+	hash := int64(2166136261)
+	for i := 0; i < 7; i++ {
+		hash *= prime64
+		hash ^= int64(key[i])
+	}
+	return hash
+	//hash := uint32(2166136261)
+	//for i := 0; i < len(key); i++ {
+	//	hash *= prime32
+	//	hash ^= uint32(key[i])
+	//}
+	//return int64(hash)
 }
 
 const (
