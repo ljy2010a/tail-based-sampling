@@ -72,7 +72,7 @@ func GenRange(dataUrl string, bufSize int) []*HttpBlock {
 
 		tmpStepSize := stepSize
 		if bufEnd == bufSize {
-			bufStart = 4096
+			bufStart = 10 * 1024 * 1024
 			bufEnd = bufStart + tmpStepSize
 		} else {
 			if bufStart+tmpStepSize > bufSize {

@@ -70,7 +70,7 @@ const (
 
 	workNum = 4
 
-	extDownloader = 2
+	extDownloader = 0
 
 	downloadStepSize = 512 * 1024 * 1024
 
@@ -194,6 +194,11 @@ func (r *Receiver) ConsumeByte(lines []int) {
 				etd.Wrong = true
 			}
 			//etd.Sbi = append(etd.Sbi, val)
+			//if int(etd.n) > cap(etd.Sbi)-1 {
+			//	nsbi := make([]int, cap(etd.Sbi)*2)
+			//	copy(nsbi, etd.Sbi[:etd.n])
+			//	etd.Sbi = nsbi
+			//}
 			etd.Sbi[etd.n] = val
 			etd.n++
 		}
@@ -221,6 +226,12 @@ func (r *Receiver) ConsumeByte(lines []int) {
 			// 已存在
 			//r.traceMiss++
 			//td.Sbi = append(td.Sbi, etd.Sbi...)
+			//if int(td.n)+int(etd.n) > cap(td.Sbi)-1 {
+			//	nsbi := make([]int, etd.n+td.n)
+			//	copy(nsbi, td.Sbi[:td.n])
+			//	td.Sbi = nsbi
+			//}
+
 			copy(td.Sbi[td.n:], etd.Sbi[:etd.n])
 			td.n += etd.n
 			if !td.Wrong && etd.Wrong {
@@ -274,6 +285,9 @@ func (r *Receiver) dropTrace(id string, td *TData, over string) {
 	wrong := td.Wrong
 	if wrong && td.Status != common.TraceStatusSended {
 		td.Status = common.TraceStatusSended
+		if over == "1" {
+			r.overWg.Add(1)
+		}
 		go r.SendWrongRequest(id, td, over)
 		return
 	} else {

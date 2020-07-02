@@ -13,8 +13,8 @@ import (
 
 var (
 	c = &fasthttp.Client{
-		MaxConnsPerHost:     20000,
-		MaxIdleConnDuration: 10 * time.Second,
+		MaxConnsPerHost:     10000,
+		MaxIdleConnDuration: 5 * time.Second,
 		ReadTimeout:         500 * time.Millisecond,
 		WriteTimeout:        500 * time.Millisecond,
 	}
@@ -28,7 +28,7 @@ var (
 func (r *Receiver) SendWrongRequest(id string, td *TData, over string) {
 
 	if over == "1" {
-		r.overWg.Add(1)
+		//r.overWg.Add(1)
 		defer r.overWg.Done()
 	}
 

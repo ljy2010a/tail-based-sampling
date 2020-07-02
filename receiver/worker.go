@@ -219,8 +219,8 @@ func (r *Receiver) readIndex() {
 				logger.Info("before has less",
 					zap.Int("less", less),
 				)
-				copy(linesBuf[4096-less:4096], linesBuf[readPos:writePos])
-				readPos = 4096 - less
+				copy(linesBuf[10*1024*1024-less:10*1024*1024], linesBuf[readPos:writePos])
+				readPos = 10*1024*1024 - less
 				writeMaxPos = start + blen
 			}
 		}
