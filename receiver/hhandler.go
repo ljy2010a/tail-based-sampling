@@ -117,12 +117,11 @@ func (r *Receiver) QueryWrongHandler(ctx *fasthttp.RequestCtx) {
 		ltd.Wrong = true
 		if ltd.Status == common.TraceStatusDone {
 			ltd.Status = common.TraceStatusSended
+			r.overWg.Add(1)
 			if over == "1" {
 				r.SendWrongRequest(id, ltd, "")
 			} else {
-				go func() {
-					r.SendWrongRequest(id, ltd, "")
-				}()
+				go r.SendWrongRequest(id, ltd, "")
 			}
 		}
 	}

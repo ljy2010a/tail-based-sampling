@@ -70,7 +70,7 @@ const (
 
 	workNum = 4
 
-	extDownloader = 0
+	extDownloader = 1
 
 	downloadStepSize = 512 * 1024 * 1024
 
@@ -285,9 +285,7 @@ func (r *Receiver) dropTrace(id string, td *TData, over string) {
 	wrong := td.Wrong
 	if wrong && td.Status != common.TraceStatusSended {
 		td.Status = common.TraceStatusSended
-		if over == "1" {
-			r.overWg.Add(1)
-		}
+		r.overWg.Add(1)
 		go r.SendWrongRequest(id, td, over)
 		return
 	} else {

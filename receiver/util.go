@@ -26,11 +26,7 @@ var (
 //}
 
 func (r *Receiver) SendWrongRequest(id string, td *TData, over string) {
-
-	if over == "1" {
-		//r.overWg.Add(1)
-		defer r.overWg.Done()
-	}
+	defer r.overWg.Done()
 
 	rtd := &common.TraceData{
 		Id:     id,
@@ -143,7 +139,7 @@ type TData struct {
 	Wrong  bool
 	Status uint8
 	n      uint8
-	id string
+	id     string
 	Sbi    []int
 	//sync.Mutex
 }

@@ -46,11 +46,11 @@ func (b *HttpBlock) asyncfill() {
 			//logger.Info("async read")
 			var n int
 			var err error
-			if b.w+b.readBufSize <= b.BufEnd {
-				n, err = io.ReadAtLeast(b.rd, b.buf[b.w:], b.readBufSize)
-			} else {
-				n, err = b.rd.Read(b.buf[b.w:])
-			}
+			//if b.w+b.readBufSize <= b.BufEnd {
+			//	n, err = io.ReadAtLeast(b.rd, b.buf[b.w:], b.readBufSize)
+			//} else {
+			n, err = b.rd.Read(b.buf[b.w:])
+			//}
 			b.w += n
 			if err != nil {
 				b.err = err
