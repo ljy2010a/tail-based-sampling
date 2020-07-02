@@ -232,11 +232,11 @@ func (r *Receiver) readIndex() {
 		writePos = writeMaxPos
 
 		for {
-			//e := readPos + 512
-			//if e >= writePos {
-			//	e = writePos
-			//}
-			if p := bytes.IndexByte(linesBuf[readPos:writePos], '\n'); p >= 0 {
+			e := readPos + 512
+			if e >= writePos {
+				e = writePos
+			}
+			if p := bytes.IndexByte(linesBuf[readPos:e], '\n'); p >= 0 {
 				//logger.Info("readPos",
 				//	zap.Int("readPos", readPos),
 				//	zap.Int("blen", blen),

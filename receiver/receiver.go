@@ -68,11 +68,13 @@ const (
 
 	tdCacheLimit = 85_0000
 
-	workNum = 2
+	workNum = 4
 
 	extDownloader = 2
 
 	downloadStepSize = 512 * 1024 * 1024
+
+	readBufSize = 64 * 1024 * 1024
 )
 
 var (
@@ -119,11 +121,11 @@ func (r *Receiver) Run() {
 		tdCache[i] = NewTData()
 	}
 
-	r.readBufSize = 64 * 1024 * 1024
+	r.readBufSize = readBufSize
 
 	r.idMapCache = make(chan *Map, batchNum)
 	for i := 0; i < batchNum; i++ {
-		r.idMapCache <- New(10000, 0.99)
+		r.idMapCache <- New(12000, 0.99)
 	}
 
 	r.linesQueue = make(chan []int, batchNum)
@@ -156,7 +158,7 @@ func (r *Receiver) ConsumeByte(lines []int) {
 	select {
 	case idToSpans = <-r.idMapCache:
 	default:
-		idToSpans = New(10000, 0.99)
+		idToSpans = New(12000, 0.99)
 	}
 	//idToSpans := make(map[string]*TData, 10000)
 	for i, val := range lines {
