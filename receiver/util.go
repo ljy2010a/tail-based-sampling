@@ -418,8 +418,8 @@ func GetTraceIdWrongByByte(l []byte) (string, bool) {
 }
 
 func GetTraceIdByString(line []byte) string {
-	l := common.BytesToString(line)
-	return l[:strings.IndexByte(l, '|')]
+	//l := common.BytesToString(line)
+	return common.BytesToString(line[:bytes.IndexByte(line, '|')])
 }
 
 func IfSpanWrongString(l []byte) bool {

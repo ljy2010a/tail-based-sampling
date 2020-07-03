@@ -99,14 +99,6 @@ func (r *Receiver) Run() {
 	//	}
 	//}()
 
-	//r.tdSendSliceLimit = 1_2000
-	//r.tdSendSlice = make([]*common.TraceData, r.tdSendSliceLimit)
-	//for i := int64(0); i < r.tdSendSliceLimit; i++ {
-	//	r.tdSendSlice[i] = &common.TraceData{
-	//		Source: r.HttpPort,
-	//		Sb:     make([][]byte, 0, 60),
-	//	}
-	//}
 	for i := int64(0); i < tdCacheLimit; i++ {
 		tdCache[i] = NewTData()
 	}
@@ -129,8 +121,6 @@ func (r *Receiver) Run() {
 	r.dropIdQueue = make(chan string, 6000)
 	r.finishSingle = make(chan interface{})
 
-	//r.linesBufLen = blockLen
-	//r.linesBuf = make([]byte, blockLen)
 	r.readChan = make(chan PP, 1024)
 
 	//go r.readIndex()
@@ -168,7 +158,6 @@ func (r *Receiver) ConsumeByte(lines []int) {
 				nowPos = nowPos % tdCacheLimit
 				td = tdCache[nowPos]
 				td.Sbi = td.Sbi[:0]
-				//td = NewTData()
 			}
 			idToSpans.Put(idh, nowPos)
 			td.Wrong = IfSpanWrongString(line)
@@ -196,7 +185,7 @@ func (r *Receiver) ConsumeByte(lines []int) {
 		}
 	}
 
-	//mapSize := len(idToSpans)
+	//mapSize := idToSpans.Size()
 	//if mapSize > r.mapMaxSize {
 	//	r.mapMaxSize = mapSize
 	//}
