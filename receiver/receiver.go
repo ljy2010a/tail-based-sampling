@@ -123,7 +123,7 @@ func (r *Receiver) Run() {
 
 	r.readChan = make(chan PP, 1024)
 
-	//go r.readIndex()
+	go r.readIndex()
 	for i := 0; i < workNum; i++ {
 		go r.readLines()
 	}

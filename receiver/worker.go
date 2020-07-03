@@ -4,7 +4,7 @@ import (
 	"bytes"
 	"fmt"
 	"go.uber.org/zap"
-	"net/http"
+	"io"
 	"sync"
 	"time"
 )
@@ -23,121 +23,121 @@ func (r *Receiver) Read(dataUrl string) {
 	btime := time.Now()
 	size := 0
 	total := 0
-	i := 0
-	iLimit := linesBatchNum - 1
-	var lines []int
-	select {
-	case lines = <-r.linesCache:
-	default:
-		lines = make([]int, linesBatchNum)
+	//i := 0
+	//iLimit := linesBatchNum - 1
+	//var lines []int
+	//select {
+	//case lines = <-r.linesCache:
+	//default:
+	//	lines = make([]int, linesBatchNum)
+	//}
+	//
+	//logger.Info("dataUrl", zap.String("dataUrl", dataUrl))
+	//resp, err := http.Get(dataUrl)
+	//if err != nil {
+	//	logger.Error("http get err", zap.Error(err))
+	//	return
+	//}
+	//defer resp.Body.Close()
+	//
+	//br := NewReaderSize(resp.Body, linesBufLen, readBufSize, linesBuf)
+	//for {
+	//	start, llen, err := br.ReadSlicePos()
+	//	if err != nil {
+	//		logger.Info("err", zap.Error(err))
+	//		break
+	//	}
+	//	size += llen
+	//	total++
+	//
+	//	lines[i] = start<<16 | llen
+	//
+	//	if i == iLimit {
+	//		r.linesQueue <- lines
+	//		select {
+	//		case lines = <-r.linesCache:
+	//		default:
+	//			lines = make([]int, linesBatchNum)
+	//		}
+	//		i = 0
+	//		continue
+	//	}
+	//	i++
+	//}
+	//if i != 0 {
+	//	r.linesQueue <- lines[:i]
+	//}
+
+	hbs := GenRange(dataUrl, linesBufLen)
+	downTaskChan := make(chan int, len(hbs))
+	for hi, hb := range hbs {
+		hb.readBufSize = r.readBufSize
+		hb.buf = linesBuf
+		downTaskChan <- hi
 	}
 
-	logger.Info("dataUrl", zap.String("dataUrl", dataUrl))
-	resp, err := http.Get(dataUrl)
-	if err != nil {
-		logger.Error("http get err", zap.Error(err))
-		return
-	}
-	defer resp.Body.Close()
-
-	br := NewReaderSize(resp.Body, linesBufLen, readBufSize, linesBuf)
-	for {
-		start, llen, err := br.ReadSlicePos()
-		if err != nil {
-			logger.Info("err", zap.Error(err))
-			break
-		}
-		size += llen
-		total++
-
-		lines[i] = start<<16 | llen
-
-		if i == iLimit {
-			r.linesQueue <- lines
-			select {
-			case lines = <-r.linesCache:
-			default:
-				lines = make([]int, linesBatchNum)
+	for i := 0; i < extDownloader; i++ {
+		go func() {
+			for hi := range downTaskChan {
+				if !hbs[hi].exitRead {
+					hbs[hi].wg.Add(1)
+					hbs[hi].asyncfill()
+				}
 			}
-			i = 0
-			continue
+		}()
+	}
+	for hi, hb := range hbs {
+		hb.exitRead = true
+		close(hb.readSignal)
+		hb.wg.Wait()
+		logger.Info("run info",
+			zap.Int("seq", hi),
+			zap.Int("w", hb.w),
+			zap.Int("has w", hb.w-hb.r),
+		)
+		stime := time.Now()
+		if hb.w > hb.r {
+			size += hb.w - hb.r
+			//total++
+			r.readChan <- PP{start: hb.r, llen: hb.w - hb.r}
 		}
-		i++
+		for {
+			//n, err := hb.rd.Read(linesBuf[hb.w:])
+			var n int
+			var err error
+			if hb.w+hb.readBufSize <= hb.BufEnd {
+				n, err = io.ReadAtLeast(hb.rd, hb.buf[hb.w:], hb.readBufSize)
+			} else {
+				n, err = hb.rd.Read(hb.buf[hb.w:])
+			}
+			if n > 0 {
+				//size += n
+				//total++
+				r.readChan <- PP{start: hb.w, llen: n}
+				hb.w += n
+			}
+			if err != nil {
+				//logger.Info("err", zap.Error(err))
+				goto RUN_DOWN
+			}
+			//if n == 0 {
+			//	logger.Info("n = 0",
+			//		zap.Int("seq", hi),
+			//		zap.Int("hb.w", hb.w),
+			//		zap.Int("should end", hb.BufEnd),
+			//	)
+			//	//goto RUN_DOWN
+			//}
+		}
+	RUN_DOWN:
+		logger.Info("run done",
+			zap.Int("seq", hi),
+			zap.Int("w", hb.w),
+			zap.Int("should end", hb.BufEnd),
+			zap.Duration("cost", time.Since(stime)),
+		)
 	}
-	if i != 0 {
-		r.linesQueue <- lines[:i]
-	}
-	//
-	//hbs := GenRange(dataUrl, linesBufLen)
-	//downTaskChan := make(chan int, len(hbs))
-	//for hi, hb := range hbs {
-	//	hb.readBufSize = r.readBufSize
-	//	hb.buf = linesBuf
-	//	downTaskChan <- hi
-	//}
-	//
-	//for i := 0; i < extDownloader; i++ {
-	//	go func() {
-	//		for hi := range downTaskChan {
-	//			if !hbs[hi].exitRead {
-	//				hbs[hi].wg.Add(1)
-	//				hbs[hi].asyncfill()
-	//			}
-	//		}
-	//	}()
-	//}
-	//for hi, hb := range hbs {
-	//	hb.exitRead = true
-	//	close(hb.readSignal)
-	//	hb.wg.Wait()
-	//	logger.Info("run info",
-	//		zap.Int("seq", hi),
-	//		zap.Int("w", hb.w),
-	//		zap.Int("has w", hb.w-hb.r),
-	//	)
-	//	stime := time.Now()
-	//	if hb.w > hb.r {
-	//		size += hb.w - hb.r
-	//		//total++
-	//		r.readChan <- PP{start: hb.r, llen: hb.w - hb.r}
-	//	}
-	//	for {
-	//		//n, err := hb.rd.Read(linesBuf[hb.w:])
-	//		var n int
-	//		var err error
-	//		if hb.w+hb.readBufSize <= hb.BufEnd {
-	//			n, err = io.ReadAtLeast(hb.rd, hb.buf[hb.w:], hb.readBufSize)
-	//		} else {
-	//			n, err = hb.rd.Read(hb.buf[hb.w:])
-	//		}
-	//		if n > 0 {
-	//			//size += n
-	//			//total++
-	//			r.readChan <- PP{start: hb.w, llen: n}
-	//			hb.w += n
-	//		}
-	//		if err != nil {
-	//			//logger.Info("err", zap.Error(err))
-	//			goto RUN_DOWN
-	//		}
-	//		//if n == 0 {
-	//		//	logger.Info("n = 0",
-	//		//		zap.Int("seq", hi),
-	//		//		zap.Int("hb.w", hb.w),
-	//		//		zap.Int("should end", hb.BufEnd),
-	//		//	)
-	//		//	//goto RUN_DOWN
-	//		//}
-	//	}
-	//RUN_DOWN:
-	//	logger.Info("run done",
-	//		zap.Int("seq", hi),
-	//		zap.Int("w", hb.w),
-	//		zap.Int("should end", hb.BufEnd),
-	//		zap.Duration("cost", time.Since(stime)),
-	//	)
-	//}
-	//
+
 	rtime := time.Since(btime)
 	ctime := time.Now()
 	clen := len(r.linesQueue)
@@ -150,8 +150,8 @@ func (r *Receiver) Read(dataUrl string) {
 		zap.Int("total", total),
 	)
 	//
-	//close(r.readChan)
-	close(r.linesQueue)
+	close(r.readChan)
+	//close(r.linesQueue)
 	r.doneWg.Wait()
 	logger.Info("all done",
 		zap.Duration("read cost", rtime),

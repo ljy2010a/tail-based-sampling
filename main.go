@@ -45,7 +45,7 @@ func main() {
 		compactor := compactor.Compactor{
 			HttpPort: httpPort,
 		}
-		runtime.GOMAXPROCS(1 * 4)
+		runtime.GOMAXPROCS(1 * 2)
 		compactor.Run()
 	}
 	fmt.Printf("port not macth [%v] \n", httpPort)
