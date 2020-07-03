@@ -423,13 +423,13 @@ func GetTraceIdByString(line []byte) string {
 }
 
 func IfSpanWrongString(l []byte) bool {
-	if bytes.Contains(l, Ferr1) {
-		return true
-	}
-	if bytes.Contains(l, FCode) && !bytes.Contains(l, FCode200) {
-		return true
-	}
-	return false
+	//if bytes.Contains(l, Ferr1) {
+	//	return true
+	//}
+	//if bytes.Contains(l, FCode) && !bytes.Contains(l, FCode200) {
+	//	return true
+	//}
+	//return false
 
 	tagPos := 32
 	httpHit := false

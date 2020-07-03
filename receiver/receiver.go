@@ -42,7 +42,7 @@ type Receiver struct {
 
 func NewTData() *TData {
 	return &TData{
-		Sbi: make([]int, 0, 50),
+		Sbi: make([]int, 0, 100),
 	}
 }
 
@@ -56,7 +56,7 @@ const (
 	linesBatchNum = 20_0000
 	batchNum      = 130
 
-	tdCacheLimit = 55_0000
+	tdCacheLimit = 50_0000
 
 	workNum = 4
 
@@ -142,7 +142,6 @@ func (r *Receiver) Run() {
 	r.RunHttpServer()
 }
 
-//func (r *Receiver) ConsumeByte(lines []int, idToSpans2 map[string]*TData, tdCachePos *int64, tdCache []*TData) {
 func (r *Receiver) ConsumeByte(lines []int) {
 	var idToSpans *Map
 	select {
