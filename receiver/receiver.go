@@ -29,30 +29,20 @@ type Receiver struct {
 	traceSkip   int
 	wrongHit    int
 
-	//tdCache    []*TData
 	tdCachePos int64
-	//tdCacheLimit int64
-
-	//tdSendSlice      []*common.TraceData
-	//tdSendSlicePos   int64
-	//tdSendSliceLimit int64
 
 	idMapCache chan *Map
 
-	linesQueue chan []int
-	//linesBatchNum int
+	linesQueue  chan []int
 	readBufSize int
 	doneWg      sync.WaitGroup
-	//linesBufLen   int
-	//linesBuf      []byte
-	//lines        []int
-	linesCache chan []int
-	readChan   chan PP
+	linesCache  chan []int
+	readChan    chan PP
 }
 
 func NewTData() *TData {
 	return &TData{
-		Sbi: make([]int, 110),
+		Sbi: make([]int, 0, 50),
 	}
 }
 
@@ -66,11 +56,11 @@ const (
 	linesBatchNum = 20_0000
 	batchNum      = 130
 
-	tdCacheLimit = 85_0000
+	tdCacheLimit = 55_0000
 
 	workNum = 4
 
-	extDownloader = 1
+	extDownloader = 0
 
 	downloadStepSize = 512 * 1024 * 1024
 
@@ -143,7 +133,7 @@ func (r *Receiver) Run() {
 	//r.linesBuf = make([]byte, blockLen)
 	r.readChan = make(chan PP, 1024)
 
-	go r.readIndex()
+	//go r.readIndex()
 	for i := 0; i < workNum; i++ {
 		go r.readLines()
 	}
@@ -176,7 +166,10 @@ func (r *Receiver) ConsumeByte(lines []int) {
 			if nowPos < tdCacheLimit {
 				td = tdCache[nowPos]
 			} else {
-				td = NewTData()
+				nowPos = nowPos % tdCacheLimit
+				td = tdCache[nowPos]
+				td.Sbi = td.Sbi[:0]
+				//td = NewTData()
 			}
 			idToSpans.Put(idh, nowPos)
 			td.Wrong = IfSpanWrongString(line)
@@ -184,23 +177,23 @@ func (r *Receiver) ConsumeByte(lines []int) {
 			if i > 2_0000 && i < linesBatchNum-2_0000 {
 				td.Status = common.TraceStatusSkip
 			}
-			td.Sbi[0] = val
-			td.n++
-			//td.Sbi = append(td.Sbi, val)
+			//td.Sbi[0] = val
+			//td.n++
+			td.Sbi = append(td.Sbi, val)
 			//idToSpans[id] = nowPos
 		} else {
 			etd := tdCache[etdp]
 			if !etd.Wrong && IfSpanWrongString(line) {
 				etd.Wrong = true
 			}
-			//etd.Sbi = append(etd.Sbi, val)
+			etd.Sbi = append(etd.Sbi, val)
 			//if int(etd.n) > cap(etd.Sbi)-1 {
 			//	nsbi := make([]int, cap(etd.Sbi)*2)
 			//	copy(nsbi, etd.Sbi[:etd.n])
 			//	etd.Sbi = nsbi
 			//}
-			etd.Sbi[etd.n] = val
-			etd.n++
+			//etd.Sbi[etd.n] = val
+			//etd.n++
 		}
 	}
 
@@ -225,15 +218,15 @@ func (r *Receiver) ConsumeByte(lines []int) {
 		if exist {
 			// 已存在
 			//r.traceMiss++
-			//td.Sbi = append(td.Sbi, etd.Sbi...)
+			td.Sbi = append(td.Sbi, etd.Sbi...)
 			//if int(td.n)+int(etd.n) > cap(td.Sbi)-1 {
 			//	nsbi := make([]int, etd.n+td.n)
 			//	copy(nsbi, td.Sbi[:td.n])
 			//	td.Sbi = nsbi
 			//}
-
-			copy(td.Sbi[td.n:], etd.Sbi[:etd.n])
-			td.n += etd.n
+			//
+			//copy(td.Sbi[td.n:], etd.Sbi[:etd.n])
+			//td.n += etd.n
 			if !td.Wrong && etd.Wrong {
 				td.Wrong = true
 			}

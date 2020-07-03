@@ -28,13 +28,24 @@ var (
 func (r *Receiver) SendWrongRequest(id string, td *TData, over string) {
 	defer r.overWg.Done()
 
+	//rtd := &common.TraceData{
+	//	Id:     id,
+	//	Source: r.HttpPort,
+	//	Sb:     make([][]byte, td.n),
+	//}
+	//for i := uint8(0); i < td.n; i++ {
+	//	val := td.Sbi[i]
+	//	start := val >> 16
+	//	llen := val & 0xffff
+	//	rtd.Sb[i] = linesBuf[start : start+llen]
+	//}
+
 	rtd := &common.TraceData{
 		Id:     id,
 		Source: r.HttpPort,
-		Sb:     make([][]byte, td.n),
+		Sb:     make([][]byte, len(td.Sbi)),
 	}
-	for i := uint8(0); i < td.n; i++ {
-		val := td.Sbi[i]
+	for i, val := range td.Sbi {
 		start := val >> 16
 		llen := val & 0xffff
 		rtd.Sb[i] = linesBuf[start : start+llen]
@@ -412,24 +423,13 @@ func GetTraceIdByString(line []byte) string {
 }
 
 func IfSpanWrongString(l []byte) bool {
-	//l := common.BytesToString(line)
-	//pos := strings.readIndex(l, "http.status_code=")
-	//if pos == -1 {
-	//	if strings.Contains(l, "error=1") {
-	//		return true
-	//	}
-	//	return false
-	//}
-	//if l[pos+17] != '2' {
-	//	return true
-	//}
-	//if l[pos+18] != '0' {
-	//	return true
-	//}
-	//if l[pos+19] != '0' {
-	//	return true
-	//}
-	//return strings.Contains(l, "error=1")
+	if bytes.Contains(l, Ferr1) {
+		return true
+	}
+	if bytes.Contains(l, FCode) && !bytes.Contains(l, FCode200) {
+		return true
+	}
+	return false
 
 	tagPos := 32
 	httpHit := false
@@ -487,21 +487,21 @@ func IfSpanWrongString(l []byte) bool {
 			// http.status_code=
 			//fmt.Println(string(l[tagPos-21:tagPos-4]), string(l[tagPos-21]), string(l[tagPos-4]), string(l[tagPos-3]), string(l[tagPos-2]))
 			if l[tagPos-21] == 'h' &&
-				//l[tagPos-20] == 't' &&
-				//l[tagPos-19] == 't' &&
-				//l[tagPos-18] == 'p' &&
-				//l[tagPos-17] == '.' &&
-				//l[tagPos-16] == 's' &&
+				l[tagPos-20] == 't' &&
+				l[tagPos-19] == 't' &&
+				l[tagPos-18] == 'p' &&
+				l[tagPos-17] == '.' &&
+				l[tagPos-16] == 's' &&
 				l[tagPos-15] == 't' &&
-				//l[tagPos-14] == 'a' &&
-				//l[tagPos-13] == 't' &&
-				//l[tagPos-12] == 'u' &&
-				//l[tagPos-11] == 's' &&
-				//l[tagPos-10] == '_' &&
-				//l[tagPos-9] == 'c' &&
+				l[tagPos-14] == 'a' &&
+				l[tagPos-13] == 't' &&
+				l[tagPos-12] == 'u' &&
+				l[tagPos-11] == 's' &&
+				l[tagPos-10] == '_' &&
+				l[tagPos-9] == 'c' &&
 				l[tagPos-8] == 'o' &&
-				//l[tagPos-7] == 'd' &&
-				//l[tagPos-6] == 'e' &&
+				l[tagPos-7] == 'd' &&
+				l[tagPos-6] == 'e' &&
 				l[tagPos-5] == '=' &&
 				!httpHit {
 				if l[tagPos-4] == '2' &&
