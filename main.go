@@ -20,13 +20,13 @@ func main() {
 		runtime.GOMAXPROCS(-1),
 	)
 
-	defer func() {
-		err := recover()
-		if err != nil {
-			fmt.Println(err)
-			time.Sleep(10 * time.Second)
-		}
-	}()
+	//defer func() {
+	//	err := recover()
+	//	if err != nil {
+	//		fmt.Println(err)
+	//		time.Sleep(10 * time.Second)
+	//	}
+	//}()
 
 	rand.Seed(time.Now().Unix())
 	var httpPort string

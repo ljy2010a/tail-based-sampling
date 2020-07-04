@@ -2,7 +2,6 @@ package receiver
 
 import (
 	"bytes"
-	"fmt"
 	"go.uber.org/zap"
 	"io"
 	"sync"
@@ -14,12 +13,12 @@ func (r *Receiver) Read(dataUrl string) {
 	//defer runtime.UnlockOSThread()
 
 	logger.Info("read start")
-	defer func() {
-		err := recover()
-		if err != nil {
-			logger.Error("", zap.String("err", fmt.Sprintf("%v", err)))
-		}
-	}()
+	//defer func() {
+	//	err := recover()
+	//	if err != nil {
+	//		logger.Error("", zap.String("err", fmt.Sprintf("%v", err)))
+	//	}
+	//}()
 	btime := time.Now()
 	size := 0
 	total := 0
@@ -149,7 +148,7 @@ func (r *Receiver) Read(dataUrl string) {
 		zap.Int("readChan count", ilen),
 		zap.Int("total", total),
 	)
-	//
+
 	close(r.readChan)
 	//close(r.linesQueue)
 	r.doneWg.Wait()
@@ -175,12 +174,12 @@ type PP struct {
 func (r *Receiver) readIndex() {
 	//runtime.LockOSThread()
 	//defer runtime.UnlockOSThread()
-	defer func() {
-		err := recover()
-		if err != nil {
-			logger.Error("", zap.String("err", fmt.Sprintf("%v", err)))
-		}
-	}()
+	//defer func() {
+	//	err := recover()
+	//	if err != nil {
+	//		logger.Error("", zap.String("err", fmt.Sprintf("%v", err)))
+	//	}
+	//}()
 
 	r.doneWg.Add(1)
 	defer r.doneWg.Done()
@@ -298,17 +297,17 @@ func (r *Receiver) readIndex() {
 func (r *Receiver) readLines() {
 	//runtime.LockOSThread()
 	//defer runtime.UnlockOSThread()
-	defer func() {
-		err := recover()
-		if err != nil {
-			logger.Error("", zap.String("err", fmt.Sprintf("%v", err)))
-		}
-	}()
+	//defer func() {
+	//	err := recover()
+	//	if err != nil {
+	//		logger.Error("", zap.String("err", fmt.Sprintf("%v", err)))
+	//	}
+	//}()
 	r.doneWg.Add(1)
 	defer r.doneWg.Done()
 
-	btime := time.Now()
-	once := sync.Once{}
+	//btime := time.Now()
+	//once := sync.Once{}
 	//idToSpans := make(map[string]*TData, 100_0000)
 
 	//skipChan := make([]string, 0, 5000)
@@ -320,9 +319,9 @@ func (r *Receiver) readLines() {
 	//	tdCache[i] = NewTData()
 	//}
 	for lines := range r.linesQueue {
-		once.Do(func() {
-			btime = time.Now()
-		})
+		//once.Do(func() {
+		//	btime = time.Now()
+		//})
 		//var idToSpans map[string]*TData
 		//select {
 		//case idToSpans = <-c.receiver.idMapCache:
@@ -395,7 +394,7 @@ func (r *Receiver) readLines() {
 		//}
 		//skipChan = skipChan[:0]
 	}
-	logger.Info("deal file done ",
-		zap.Duration("cost", time.Since(btime)),
-	)
+	//logger.Info("deal file done ",
+	//	zap.Duration("cost", time.Since(btime)),
+	//)
 }

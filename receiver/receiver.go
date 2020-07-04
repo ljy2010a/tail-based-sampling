@@ -56,11 +56,11 @@ const (
 	linesBatchNum = 20_0000
 	batchNum      = 130
 
-	tdCacheLimit = 50_0000
+	tdCacheLimit = 524288
 
 	workNum = 4
 
-	extDownloader = 0
+	extDownloader = 1
 
 	downloadStepSize = 512 * 1024 * 1024
 
@@ -155,7 +155,7 @@ func (r *Receiver) ConsumeByte(lines []int) {
 			if nowPos < tdCacheLimit {
 				td = tdCache[nowPos]
 			} else {
-				nowPos = nowPos % tdCacheLimit
+				nowPos = nowPos & (tdCacheLimit - 1)
 				td = tdCache[nowPos]
 				td.Sbi = td.Sbi[:0]
 			}
