@@ -20,7 +20,6 @@ func main() {
 	runtime.GOMAXPROCS(2)
 	go func() {
 		http.ListenAndServe("0.0.0.0:6060", nil)
-
 	}()
 	rr := receiver.Receiver{
 		HttpPort:             "8000",
@@ -45,16 +44,6 @@ func main() {
 	go compactor.Run()
 	go rr.Run()
 	//go rr2.Run()
-	time.Sleep(1 * time.Second)
-	//receiver.ReadMem("/Users/liangjunyu/Desktop/trace1.data")
-	//receiver.ReadMem("/Users/liangjunyu/Desktop/trace1b.data")
-
-	//receiver.ReadFile("/Users/liangjunyu/Desktop/trace1.data")
-	//receiver.ReadFile("/Users/liangjunyu/Desktop/trace1b.data")
-
-	//go receiver.ReadHttp("http://127.0.0.1:8081/trace1.data")
-	//go receiver.ReadHttp("http://127.0.0.1:8081/trace2.data")
-
 	for {
 		time.Sleep(1 * time.Second)
 	}

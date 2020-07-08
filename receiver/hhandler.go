@@ -128,3 +128,138 @@ func (r *Receiver) QueryWrongHandler(ctx *fasthttp.RequestCtx) {
 	ctx.SetStatusCode(http.StatusOK)
 	return
 }
+
+var (
+	c = &fasthttp.Client{
+		MaxConnsPerHost:     10000,
+		MaxIdleConnDuration: 5 * time.Second,
+		ReadTimeout:         500 * time.Millisecond,
+		WriteTimeout:        500 * time.Millisecond,
+	}
+	//reqPool *ants.Pool
+)
+
+//func init() {
+//	reqPool, _ = ants.NewPool(1000, ants.WithPreAlloc(true))
+//}
+
+func (r *Receiver) SendWrongRequest(id string, td *TData, over string) {
+	defer r.overWg.Done()
+
+	//rtd := &common.TraceData{
+	//	Id:     id,
+	//	Source: r.HttpPort,
+	//	Sb:     make([][]byte, td.n),
+	//}
+	//for i := uint8(0); i < td.n; i++ {
+	//	val := td.Sbi[i]
+	//	start := val >> 16
+	//	llen := val & 0xffff
+	//	rtd.Sb[i] = linesBuf[start : start+llen]
+	//}
+
+	rtd := &common.TraceData{
+		Id:     id,
+		Source: r.HttpPort,
+		Sb:     make([][]byte, len(td.Sbi)),
+	}
+	for i, val := range td.Sbi {
+		start := val >> 16
+		llen := val & 0xffff
+		rtd.Sb[i] = linesBuf[start : start+llen]
+	}
+
+	//var rtd *common.TraceData
+	//if nowPos := atomic.AddInt64(&r.tdSendSlicePos, 1); nowPos < r.tdSendSliceLimit {
+	//	rtd = r.tdSendSlice[nowPos]
+	//} else {
+	//	rtd = &common.TraceData{
+	//		Source: r.HttpPort,
+	//		Sb:     make([][]byte, len(td.Sbi)),
+	//	}
+	//}
+	//
+	//rtd.Id = id
+	//for _, val := range td.Sbi {
+	//	start := val >> 16
+	//	llen := val & 0xffff
+	//	rtd.Sb = append(rtd.Sb, r.consumer.linesBuf[start:start+llen])
+	//}
+
+	b, _ := rtd.Marshal()
+	req := fasthttp.AcquireRequest()
+	defer fasthttp.ReleaseRequest(req)
+
+	req.SetRequestURI(r.CompactorSetWrongUrl + fmt.Sprintf("?over=%s", over))
+	req.Header.SetMethod("POST")
+	req.Header.SetContentType("application/json")
+	req.SetBody(b)
+
+	resp := fasthttp.AcquireResponse()
+	defer fasthttp.ReleaseResponse(resp)
+
+	//return
+	if err := c.Do(req, resp); err != nil {
+		fmt.Printf("set wrong fail id[%v] err[%v] \n", id, err)
+		return
+	}
+	if resp.StatusCode() != fasthttp.StatusOK {
+		fmt.Printf("set wrong fail[%v] code[%v]\n", id, resp.StatusCode())
+		return
+	}
+
+}
+
+func (r *Receiver) notifyFIN() {
+	notifyUrl := fmt.Sprintf("http://127.0.0.1:%s/fn?port=%s", r.CompactorPort, r.HttpPort)
+
+	req := fasthttp.AcquireRequest()
+	defer fasthttp.ReleaseRequest(req)
+
+	req.SetRequestURI(notifyUrl)
+	req.Header.SetMethod("GET")
+
+	resp := fasthttp.AcquireResponse()
+	defer fasthttp.ReleaseResponse(resp)
+
+	if err := c.Do(req, resp); err != nil {
+		logger.Info("send notify fin",
+			zap.Error(err),
+		)
+		return
+	}
+	if resp.StatusCode() != fasthttp.StatusOK {
+		logger.Info("send notify fin",
+			zap.Int("code", resp.StatusCode()),
+		)
+		return
+	}
+}
+
+func (r *Receiver) warmUp(wg sync.WaitGroup) {
+	wg.Add(1)
+	defer wg.Done()
+	notifyUrl := fmt.Sprintf("http://127.0.0.1:%s/warmup?port=%s", r.CompactorPort, r.HttpPort)
+
+	req := fasthttp.AcquireRequest()
+	defer fasthttp.ReleaseRequest(req)
+
+	req.SetRequestURI(notifyUrl)
+	req.Header.SetMethod("GET")
+
+	resp := fasthttp.AcquireResponse()
+	defer fasthttp.ReleaseResponse(resp)
+
+	if err := c.Do(req, resp); err != nil {
+		logger.Info("send warm up",
+			zap.Error(err),
+		)
+		return
+	}
+	if resp.StatusCode() != fasthttp.StatusOK {
+		logger.Info("send notify fin",
+			zap.Int("code", resp.StatusCode()),
+		)
+		return
+	}
+}

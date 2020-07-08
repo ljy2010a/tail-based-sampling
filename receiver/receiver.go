@@ -46,24 +46,28 @@ func NewTData() *TData {
 	}
 }
 
-func NewIdMapCache() map[string]*TData {
-	return make(map[string]*TData, 10000)
-}
-
 const (
+	// buffer 缓冲区大小
 	linesBufLen = int(2.5 * 1024 * 1024 * 1024)
 
+	// 聚合批处理长度
 	linesBatchNum = 20_0000
+	// 预分配
 	batchNum      = 130
 
+	// trace 环形数组
 	tdCacheLimit = 524288
 
+	// 处理具体数据的worker
 	workNum = 4
 
+	// 额外的下载协程数量
 	extDownloader = 1
 
+	// 用于每个range下载的初始大小
 	downloadStepSize = 512 * 1024 * 1024
 
+	// 下载文件时,凑够buffer再提交处理队列
 	readBufSize = 64 * 1024 * 1024
 )
 
@@ -139,7 +143,6 @@ func (r *Receiver) ConsumeByte(lines []int) {
 	default:
 		idToSpans = New(12000, 0.99)
 	}
-	//idToSpans := make(map[string]*TData, 10000)
 	for i, val := range lines {
 		start := val >> 16
 		llen := val & 0xffff
@@ -168,7 +171,6 @@ func (r *Receiver) ConsumeByte(lines []int) {
 			//td.Sbi[0] = val
 			//td.n++
 			td.Sbi = append(td.Sbi, val)
-			//idToSpans[id] = nowPos
 		} else {
 			etd := tdCache[etdp]
 			if !etd.Wrong && IfSpanWrongString(line) {
@@ -235,7 +237,6 @@ func (r *Receiver) ConsumeByte(lines []int) {
 			case r.dropIdQueue <- id:
 				postDeletion = true
 			default:
-				//<-r.dropIdQueue
 				dropId, ok := <-r.dropIdQueue
 				if ok {
 					r.dropTraceById(dropId, "0")

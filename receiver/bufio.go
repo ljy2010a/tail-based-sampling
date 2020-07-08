@@ -90,40 +90,36 @@ func (b *Reader) reset(buf []byte, r io.Reader) {
 
 var errNegativeRead = errors.New("bufio: reader returned negative count from Read")
 
-// fill reads a new chunk into the buffer.
-func (b *Reader) fill() {
-	//fmt.Println("fill", b.w, b.readBufSize)
-	if b.w+b.readBufSize > b.bufSize {
-		fmt.Println("move", time.Now().UnixNano()/1e6, b.w)
-		copy(b.buf, b.buf[b.r:b.w])
-		b.w -= b.r
-		b.r = 0
-	}
-
-	//if b.w >= len(b.buf) {
-	//	panic("bufio: tried to fill full buffer")
-	//}
-
-	// Read new data: try a limited number of times.
-	//for i := maxConsecutiveEmptyReads; i > 0; i-- {
-	//n, err := b.rd.Read(b.buf[b.w:])
-	n, err := io.ReadAtLeast(b.rd, b.buf[b.w:], b.readBufSize)
-	//if n < 0 {
-	//	panic(errNegativeRead)
-	//}
-	b.w += n
-	if err != nil {
-		b.err = err
-		//fmt.Printf("read err=%v n=%d \n", err, n)
-		return
-	}
-	if n > 0 {
-		//fmt.Printf("read n=%d \n", n)
-		return
-	}
-	//}
-	//b.err = io.ErrNoProgress
-}
+//// fill reads a new chunk into the buffer.
+//func (b *Reader) fill() {
+//	// Slide existing data to beginning.
+//	if b.r > 0 {
+//		copy(b.buf, b.buf[b.r:b.w])
+//		b.w -= b.r
+//		b.r = 0
+//	}
+//
+//	if b.w >= len(b.buf) {
+//		panic("bufio: tried to fill full buffer")
+//	}
+//
+//	// Read new data: try a limited number of times.
+//	for i := maxConsecutiveEmptyReads; i > 0; i-- {
+//		n, err := b.rd.Read(b.buf[b.w:])
+//		if n < 0 {
+//			panic(errNegativeRead)
+//		}
+//		b.w += n
+//		if err != nil {
+//			b.err = err
+//			return
+//		}
+//		if n > 0 {
+//			return
+//		}
+//	}
+//	b.err = io.ErrNoProgress
+//}
 
 func (b *Reader) readErr() error {
 	err := b.err
@@ -380,27 +376,28 @@ func (b *Reader) ReadSlice(delim byte) (line []byte, err error) {
 	return
 }
 
-func (b *Reader) ReadSlicePos() (start, llen int, err error) {
-	//s := 0 // search start index
-	for {
-		// Search buffer.
-		//if b.r+512 > b.w {
-		//	if i := bytes.IndexByte(b.buf[b.r:b.w], '\n'); i >= 0 {
-		//		start = b.r
-		//		llen = i + 1
-		//		b.r += i + 1
-		//		break
-		//	}
-		//} else {
-		//	if i := bytes.IndexByte(b.buf[b.r:b.r+512], '\n'); i >= 0 {
-		//		//i += 100
-		//		start = b.r
-		//		llen = i + 1
-		//		b.r += i + 1
-		//		break
-		//	}
-		//}
+// fill reads a new chunk into the buffer.
+func (b *Reader) fill() {
+	if b.w+b.readBufSize > b.bufSize {
+		fmt.Println("move", time.Now().UnixNano()/1e6, b.w)
+		copy(b.buf, b.buf[b.r:b.w])
+		b.w -= b.r
+		b.r = 0
+	}
 
+	n, err := io.ReadAtLeast(b.rd, b.buf[b.w:], b.readBufSize)
+	b.w += n
+	if err != nil {
+		b.err = err
+		return
+	}
+	if n > 0 {
+		return
+	}
+}
+
+func (b *Reader) ReadSlicePos() (start, llen int, err error) {
+	for {
 		if i := bytes.IndexByte(b.buf[b.r:b.w], '\n'); i >= 0 {
 			start = b.r
 			llen = i + 1
@@ -408,33 +405,12 @@ func (b *Reader) ReadSlicePos() (start, llen int, err error) {
 			break
 		}
 
-		// Pending error?
 		if b.err != nil {
-			//line = b.buf[b.r:b.w]
-			//b.r = b.w
 			err = b.readErr()
 			break
 		}
-
-		//// Buffer full?
-		//if b.Buffered() >= len(b.buf) {
-		//	b.r = b.w
-		//	line = b.buf
-		//	err = ErrBufferFull
-		//	break
-		//}
-
-		//s = b.w - b.r // do not rescan area we scanned before
-
 		b.fill() // buffer is not full
 	}
-
-	// Handle last byte, if any.
-	//if i := len(line) - 1; i >= 0 {
-	//	b.lastByte = int(line[i])
-	//	b.lastRuneSize = -1
-	//}
-
 	return
 }
 
@@ -458,16 +434,16 @@ func (b *Reader) ReadLine() (line []byte, isPrefix bool, err error) {
 	line, err = b.ReadSlice('\n')
 	if err == ErrBufferFull {
 		// Handle the case where "\r\n" straddles the buffer.
-		//if len(line) > 0 && line[len(line)-1] == '\r' {
-		//	// Put the '\r' back on buf and drop it from line.
-		//	// Let the next call to ReadLine check for "\r\n".
-		//	if b.r == 0 {
-		//		// should be unreachable
-		//		panic("bufio: tried to rewind past start of buffer")
-		//	}
-		//	b.r--
-		//	line = line[:len(line)-1]
-		//}
+		if len(line) > 0 && line[len(line)-1] == '\r' {
+			// Put the '\r' back on buf and drop it from line.
+			// Let the next call to ReadLine check for "\r\n".
+			if b.r == 0 {
+				// should be unreachable
+				panic("bufio: tried to rewind past start of buffer")
+			}
+			b.r--
+			line = line[:len(line)-1]
+		}
 		return line, true, nil
 	}
 
@@ -481,9 +457,9 @@ func (b *Reader) ReadLine() (line []byte, isPrefix bool, err error) {
 
 	if line[len(line)-1] == '\n' {
 		drop := 1
-		//if len(line) > 1 && line[len(line)-2] == '\r' {
-		//	drop = 2
-		//}
+		if len(line) > 1 && line[len(line)-2] == '\r' {
+			drop = 2
+		}
 		line = line[:len(line)-drop]
 	}
 	return

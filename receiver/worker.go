@@ -224,10 +224,6 @@ func (r *Receiver) readIndex() {
 			}
 		}
 
-		//if writeMaxPos == c.linesBufLen {
-		//	logger.Info("reach block end", )
-		//}
-
 		writePos = writeMaxPos
 
 		for {
@@ -256,7 +252,6 @@ func (r *Receiver) readIndex() {
 				//	c.linesQueue <- c.lines[total-c.linesBatchNum : total]
 				//}
 				if i == iLimit {
-					//c.receiver.ConsumeByte(lines)
 					r.linesQueue <- lines
 					select {
 					case lines = <-r.linesCache:
@@ -305,96 +300,7 @@ func (r *Receiver) readLines() {
 	//}()
 	r.doneWg.Add(1)
 	defer r.doneWg.Done()
-
-	//btime := time.Now()
-	//once := sync.Once{}
-	//idToSpans := make(map[string]*TData, 100_0000)
-
-	//skipChan := make([]string, 0, 5000)
-	//lastChan := make([]string, 0, 5000)
-	//tmplastChan := make([]string, 0, 5000)
-	//var tdCachePos int64
-	//tdCache := make([]*TData, c.receiver.tdCacheLimit)
-	//for i := int64(0); i < c.receiver.tdCacheLimit; i++ {
-	//	tdCache[i] = NewTData()
-	//}
 	for lines := range r.linesQueue {
-		//once.Do(func() {
-		//	btime = time.Now()
-		//})
-		//var idToSpans map[string]*TData
-		//select {
-		//case idToSpans = <-c.receiver.idMapCache:
-		//default:
-		//	idToSpans = make(map[string]*TData, 10000)
-		//}
 		r.ConsumeByte(lines)
-		//c.receiver.ConsumeByte(lines, idToSpans)
-		//for k := range idToSpans {
-		//	delete(idToSpans, k)
-		//}
-
-		//for i, val := range lines {
-		//	start := val >> 16
-		//	llen := val & 0xffff
-		//	line := c.linesBuf[start : start+llen]
-		//	id := GetTraceIdByString(line)
-		//
-		//	//etd, eok := c.receiver.idToTrace.Load(id)
-		//	//if !eok {
-		//	//	c.receiver.tdCachePos += 1
-		//	//	if c.receiver.tdCachePos < c.receiver.tdCacheLimit {
-		//	//		etd = c.receiver.tdCache[c.receiver.tdCachePos]
-		//	//	} else {
-		//	//		etd = NewTData()
-		//	//	}
-		//	//	etd, eok = c.receiver.idToTrace.LoadOrStore(id, etd)
-		//	//}
-		//	//if !etd.Wrong && IfSpanWrongString(line) {
-		//	//	etd.Wrong = true
-		//	//}
-		//	//etd.Sbi = append(etd.Sbi, val)
-		//
-		//	var etd *TData
-		//	var ok bool
-		//	if etd, ok = idToSpans[id]; !ok {
-		//		c.receiver.tdCachePos += 1
-		//		if c.receiver.tdCachePos < c.receiver.tdCacheLimit {
-		//			etd = c.receiver.tdCache[c.receiver.tdCachePos]
-		//		} else {
-		//			etd = NewTData()
-		//		}
-		//		idToSpans[id] = etd
-		//		if i > 2_0000 && i < 8_0000 {
-		//			etd.Status = common.TraceStatusSkip
-		//			//	skipChan = append(skipChan, id)
-		//		} else {
-		//			//	tmplastChan = append(tmplastChan, id)
-		//		}
-		//	}
-		//
-		//	if !etd.Wrong && IfSpanWrongString(c.linesBuf[start:start+llen]) {
-		//		etd.Wrong = true
-		//	}
-		//	etd.Sbi = append(etd.Sbi, val)
-		//}
-
-		//logger.Info("deal block done ",
-		//	zap.Int("lastChan", len(lastChan)),
-		//	zap.Int("tmplastChan", len(tmplastChan)),
-		//	zap.Int("skipChan", len(skipChan)),
-		//)
-		//for z := range lastChan {
-		//	c.receiver.dropTrace(lastChan[z], idToSpans[lastChan[z]], "")
-		//}
-		//lastChan = lastChan[:0]
-		//lastChan, tmplastChan = tmplastChan, lastChan
-		//for z := range skipChan {
-		//	c.receiver.dropTrace(skipChan[z], idToSpans[skipChan[z]], "")
-		//}
-		//skipChan = skipChan[:0]
 	}
-	//logger.Info("deal file done ",
-	//	zap.Duration("cost", time.Since(btime)),
-	//)
 }

@@ -24,6 +24,23 @@ func (b *HttpBlock) fill() {
 	//b.err = io.ErrNoProgress
 }
 
+func (b *HttpBlock) ReadSlicePos() (start, llen int, err error) {
+	for {
+		if i := bytes.IndexByte(b.buf[b.r:b.w], '\n'); i >= 0 {
+			start = b.r
+			llen = i + 1
+			b.r += i + 1
+			break
+		}
+		if b.err != nil {
+			err = b.readErr()
+			break
+		}
+		b.fill()
+	}
+	return
+}
+
 func (b *HttpBlock) asyncfill() {
 	btime := time.Now()
 	defer func() {
@@ -74,21 +91,4 @@ func (b *HttpBlock) readErr() error {
 	err := b.err
 	b.err = nil
 	return err
-}
-
-func (b *HttpBlock) ReadSlicePos() (start, llen int, err error) {
-	for {
-		if i := bytes.IndexByte(b.buf[b.r:b.w], '\n'); i >= 0 {
-			start = b.r
-			llen = i + 1
-			b.r += i + 1
-			break
-		}
-		if b.err != nil {
-			err = b.readErr()
-			break
-		}
-		b.fill()
-	}
-	return
 }
